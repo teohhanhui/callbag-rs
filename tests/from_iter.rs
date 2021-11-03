@@ -10,7 +10,7 @@ use callbag::{from_iter, Message};
 fn it_sends_array_items_iterator_to_a_puller_sink() {
     let source = from_iter([10, 20, 30]);
 
-    let downwards_expected_types: Vec<(fn(&Message<_>) -> bool, &str)> = vec![
+    let downwards_expected_types: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -130,7 +130,7 @@ fn it_stops_sending_after_source_completion() {
     let source = from_iter([10, 20, 30]);
 
     let actual = Arc::new(RwLock::new(vec![]));
-    let downwards_expected_types: Vec<(fn(&Message<_>) -> bool, &str)> = vec![
+    let downwards_expected_types: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
     ];

@@ -10,3 +10,4 @@ keywords = ["frp", "reactive", "stream", "observable", "iterable"]
 categories = ["asynchronous", "concurrency"]
 
 [dependencies]
+never = "0.1.0"
