@@ -6,16 +6,19 @@ use std::{
     },
 };
 
-use crate::{Callbag, Message};
+use crate::{Message, Source};
 
-pub fn from_iter<T: 'static, I: 'static>(iter: I) -> Callbag<T>
+/// Convert an iterator to a callbag pullable source (it only sends data when requested).
+///
+/// https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/index.js#L1-L34
+pub fn from_iter<T: 'static, I: 'static>(iter: I) -> Source<T>
 where
     T: Send + Sync,
     I: IntoIterator<Item = T> + Send + Sync + Clone,
     <I as std::iter::IntoIterator>::IntoIter: Send + Sync,
 {
     (move |message| {
-        if let Message::Start(sink) = message {
+        if let Message::Handshake(sink) = message {
             let iter = Arc::new(RwLock::new(iter.clone().into_iter()));
             let sink = Arc::new(RwLock::new(move |message| {
                 sink(message);
@@ -60,7 +63,7 @@ where
                 let sink = sink.read().unwrap();
                 sink
             };
-            sink(Message::Start(
+            sink(Message::Handshake(
                 ({
                     move |t| {
                         if completed.load(AtomicOrdering::Acquire) {
