@@ -46,14 +46,14 @@ where
                             *res = iter.next();
                             res_done.store(res.is_none(), AtomicOrdering::Release);
                         }
+                        let sink = sink.read().unwrap();
                         if res_done.load(AtomicOrdering::Acquire) {
-                            let sink = sink.read().unwrap();
-                            sink(Message::End);
+                            sink(Message::Terminate);
                             break;
                         } else {
                             let mut res = res.write().unwrap();
-                            let sink = sink.read().unwrap();
-                            sink(Message::Data(res.take().unwrap()));
+                            let res = res.take().unwrap();
+                            sink(Message::Data(res));
                         }
                     }
                     in_loop.store(false, AtomicOrdering::Release);
@@ -77,7 +77,7 @@ where
                             {
                                 r#loop();
                             }
-                        } else if let Message::End = t {
+                        } else if let Message::Terminate = t {
                             completed.store(true, AtomicOrdering::Release);
                         }
                     }

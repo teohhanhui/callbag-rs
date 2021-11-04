@@ -1,8 +1,10 @@
 use never::Never;
 use std::ops::Deref;
 
+pub use crate::for_each::for_each;
 pub use crate::from_iter::from_iter;
 
+mod for_each;
 mod from_iter;
 
 /// https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L12-L22
@@ -10,7 +12,7 @@ pub enum Message<I, O> {
     Handshake(Callbag<O, I>),
     Data(I),
     Pull,
-    End,
+    Terminate,
 }
 
 /// A Callbag dynamically receives input of type I and dynamically delivers output of type O
