@@ -1,13 +1,16 @@
-use async_nursery::{NurseExt, Nursery};
-use futures_timer::Delay;
 use std::{
     collections::VecDeque,
-    pin::Pin,
     sync::{
         atomic::{AtomicUsize, Ordering as AtomicOrdering},
         Arc, RwLock,
     },
-    time::Duration,
+};
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+use {
+    async_nursery::{NurseExt, Nursery},
+    futures_timer::Delay,
+    std::{pin::Pin, time::Duration},
 };
 
 use callbag::{for_each, Message};
@@ -99,6 +102,7 @@ fn it_iterates_a_finite_pullable_source() {
 }
 
 /// <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L52-L109>
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 async fn it_observes_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
