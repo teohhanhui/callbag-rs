@@ -8,7 +8,7 @@ use std::{
 
 use callbag::{from_iter, Message};
 
-/// https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L4-L34
+/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L4-L34>
 #[test]
 fn it_sends_array_items_iterator_to_a_puller_sink() {
     let source = from_iter([10, 20, 30]);
@@ -57,7 +57,7 @@ fn it_sends_array_items_iterator_to_a_puller_sink() {
     ));
 }
 
-/// https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97
+/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97>
 #[test]
 fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     #[derive(Clone)]
@@ -129,7 +129,7 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     );
 }
 
-/// https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L99-L129
+/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L99-L129>
 #[test]
 fn it_stops_sending_after_source_completion() {
     let source = from_iter([10, 20, 30]);

@@ -10,7 +10,7 @@ use crate::{Message, Source};
 
 /// Convert an iterator to a callbag pullable source (it only sends data when requested).
 ///
-/// https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/index.js#L1-L34
+/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/index.js#L1-L34>
 pub fn from_iter<T: 'static, I: 'static>(iter: I) -> Source<T>
 where
     T: Send + Sync,
