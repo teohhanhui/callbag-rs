@@ -10,7 +10,7 @@ use callbag::{from_iter, Message};
 
 /// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L4-L34>
 #[test]
-fn it_sends_array_items_iterator_to_a_puller_sink() {
+fn it_sends_array_items_iterable_to_a_puller_sink() {
     let source = from_iter([10, 20, 30]);
 
     let downwards_expected_types: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
@@ -48,6 +48,55 @@ fn it_sends_array_items_iterator_to_a_puller_sink() {
                 let mut downwards_expected = downwards_expected.write().unwrap();
                 let e = downwards_expected.pop_front().unwrap();
                 assert_eq!(data, e, "downwards data is expected: {}", e);
+                let talkback = talkback.read().unwrap();
+                let talkback = talkback.as_ref().unwrap();
+                talkback(Message::Pull);
+            }
+        })
+        .into(),
+    ));
+}
+
+/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L36-L66>
+#[test]
+fn it_sends_array_entries_iterator_to_a_puller_sink() {
+    let source = from_iter(["a", "b", "c"].into_iter().enumerate());
+
+    let downwards_expected_types: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
+        (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
+        (|m| matches!(m, Message::Data(_)), "Message::Data"),
+        (|m| matches!(m, Message::Data(_)), "Message::Data"),
+        (|m| matches!(m, Message::Data(_)), "Message::Data"),
+        (|m| matches!(m, Message::Terminate), "Message::Terminate"),
+    ];
+    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
+        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected = [(0, "a"), (1, "b"), (2, "c")];
+    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
+        Arc::new(RwLock::new(downwards_expected.into()));
+
+    let talkback = Arc::new(RwLock::new(None));
+    source(Message::Handshake(
+        (move |message| {
+            {
+                let mut downwards_expected_types = downwards_expected_types.write().unwrap();
+                let et = downwards_expected_types.pop_front().unwrap();
+                assert!(et.0(&message), "downwards type is expected: {}", et.1);
+            }
+
+            if let Message::Handshake(source) = message {
+                {
+                    let mut talkback = talkback.write().unwrap();
+                    *talkback = Some(source);
+                }
+                let talkback = talkback.read().unwrap();
+                let talkback = talkback.as_ref().unwrap();
+                talkback(Message::Pull);
+                return;
+            } else if let Message::Data(data) = message {
+                let mut downwards_expected = downwards_expected.write().unwrap();
+                let e = downwards_expected.pop_front().unwrap();
+                assert_eq!(data, e, "downwards data is expected: {:?}", e);
                 let talkback = talkback.read().unwrap();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
