@@ -6,10 +6,28 @@ use std::{
     },
 };
 
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
+use wasm_bindgen_test::wasm_bindgen_test;
+#[cfg(all(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "browser",
+))]
+use wasm_bindgen_test::wasm_bindgen_test_configure;
+
 use callbag::{from_iter, Message};
+
+#[cfg(all(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "browser",
+))]
+wasm_bindgen_test_configure!(run_in_browser);
 
 /// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L4-L34>
 #[test]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    wasm_bindgen_test
+)]
 fn it_sends_array_items_iterable_to_a_puller_sink() {
     let source = from_iter([10, 20, 30]);
 
@@ -59,6 +77,10 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
 
 /// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L36-L66>
 #[test]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    wasm_bindgen_test
+)]
 fn it_sends_array_entries_iterator_to_a_puller_sink() {
     let source = from_iter(["a", "b", "c"].into_iter().enumerate());
 
@@ -108,6 +130,10 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
 
 /// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97>
 #[test]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    wasm_bindgen_test
+)]
 fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     #[derive(Clone)]
     struct Gen {
@@ -180,6 +206,10 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
 
 /// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L99-L129>
 #[test]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    wasm_bindgen_test
+)]
 fn it_stops_sending_after_source_completion() {
     let source = from_iter([10, 20, 30]);
 

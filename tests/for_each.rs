@@ -13,10 +13,28 @@ use {
     std::{pin::Pin, time::Duration},
 };
 
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
+use wasm_bindgen_test::wasm_bindgen_test;
+#[cfg(all(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "browser",
+))]
+use wasm_bindgen_test::wasm_bindgen_test_configure;
+
 use callbag::{for_each, Message};
+
+#[cfg(all(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "browser",
+))]
+wasm_bindgen_test_configure!(run_in_browser);
 
 /// <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L4-L50>
 #[test]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    wasm_bindgen_test
+)]
 fn it_iterates_a_finite_pullable_source() {
     let upwards_expected: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
         (|m| matches!(m, Message::Pull), "Message::Pull"),
@@ -104,6 +122,13 @@ fn it_iterates_a_finite_pullable_source() {
 /// <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L52-L109>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
+#[cfg_attr(
+    all(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "browser",
+    ),
+    wasm_bindgen_test
+)]
 async fn it_observes_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let upwards_expected: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
