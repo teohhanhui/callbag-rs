@@ -3,9 +3,11 @@ use std::ops::Deref;
 
 pub use crate::for_each::for_each;
 pub use crate::from_iter::from_iter;
+pub use crate::map::map;
 
 mod for_each;
 mod from_iter;
+mod map;
 
 /// https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L12-L22
 pub enum Message<I, O> {
