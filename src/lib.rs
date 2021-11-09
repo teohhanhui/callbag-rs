@@ -9,7 +9,7 @@ mod for_each;
 mod from_iter;
 mod map;
 
-/// https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L12-L22
+/// <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L12-L22>
 pub enum Message<I, O> {
     Handshake(Callbag<O, I>),
     Data(I),
@@ -19,17 +19,17 @@ pub enum Message<I, O> {
 
 /// A Callbag dynamically receives input of type I and dynamically delivers output of type O
 ///
-/// https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L24-L30
+/// <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L24-L30>
 pub struct Callbag<I, O>(Box<dyn Fn(Message<I, O>) + Send + Sync>);
 
 /// A source only delivers data
 ///
-/// https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L32-L35
+/// <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L32-L35>
 pub type Source<T> = Callbag<Never, T>;
 
 /// A sink only receives data
 ///
-/// https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L37-L40
+/// <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L37-L40>
 pub type Sink<T> = Callbag<T, Never>;
 
 impl<I, O, F> From<F> for Callbag<I, O>
