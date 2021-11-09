@@ -22,7 +22,7 @@ use callbag::{from_iter, Message};
 ))]
 wasm_bindgen_test_configure!(run_in_browser);
 
-/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L4-L34>
+/// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L4-L34>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -77,7 +77,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
     ));
 }
 
-/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L36-L66>
+/// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L36-L66>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -132,7 +132,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
     ));
 }
 
-/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97>
+/// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -208,7 +208,7 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     );
 }
 
-/// <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L99-L129>
+/// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L99-L129>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),

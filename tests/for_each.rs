@@ -29,7 +29,7 @@ use callbag::{for_each, Message};
 ))]
 wasm_bindgen_test_configure!(run_in_browser);
 
-/// <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L4-L50>
+/// See <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L4-L50>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -125,7 +125,7 @@ fn it_iterates_a_finite_pullable_source() {
     sink(source);
 }
 
-/// <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L52-L109>
+/// See <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L52-L109>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(

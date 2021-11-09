@@ -29,7 +29,7 @@ use callbag::{map, Message};
 ))]
 wasm_bindgen_test_configure!(run_in_browser);
 
-/// <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/readme.js#L24-L29>
+/// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/readme.js#L24-L29>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -162,7 +162,7 @@ fn it_maps_a_pullable_source() {
     mapped(Message::Handshake(sink));
 }
 
-/// <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/test.js#L88-L154>
+/// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/test.js#L88-L154>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(
@@ -286,7 +286,7 @@ async fn it_maps_an_async_finite_source() {
         .ok();
 }
 
-/// <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/test.js#L156-L215>
+/// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/test.js#L156-L215>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(

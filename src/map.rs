@@ -4,7 +4,7 @@ use crate::{Message, Source};
 ///
 /// Works on either pullable or listenable sources.
 ///
-/// <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/readme.js#L24-L29>
+/// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/readme.js#L24-L29>
 pub fn map<I: 'static, O: 'static, F: 'static>(f: F) -> Box<dyn Fn(Source<I>) -> Source<O>>
 where
     F: Fn(I) -> O + Send + Sync + Clone,
