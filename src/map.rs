@@ -17,33 +17,30 @@ where
                     source(Message::Handshake(
                         ({
                             let f = f.clone();
-                            move |message| {
-                                if let Message::Data(data) = message {
-                                    sink(Message::Data(f(data)));
-                                } else {
-                                    sink(match message {
-                                        Message::Handshake(source) => Message::Handshake(
-                                            ({
-                                                move |message| match message {
-                                                    Message::Handshake(_) => {}
-                                                    Message::Data(_) => {}
-                                                    Message::Pull => {
-                                                        source(Message::Pull);
-                                                    }
-                                                    Message::Terminate => {
-                                                        source(Message::Terminate);
-                                                    }
+                            move |message| match message {
+                                Message::Handshake(source) => {
+                                    sink(Message::Handshake(
+                                        ({
+                                            move |message| match message {
+                                                Message::Pull => {
+                                                    source(Message::Pull);
                                                 }
-                                            })
-                                            .into(),
-                                        ),
-                                        Message::Data(_) => {
-                                            unreachable!();
-                                        }
-                                        Message::Pull => Message::Pull,
-                                        Message::Terminate => Message::Terminate,
-                                    });
+                                                Message::Terminate => {
+                                                    source(Message::Terminate);
+                                                }
+                                                _ => {}
+                                            }
+                                        })
+                                        .into(),
+                                    ));
                                 }
+                                Message::Data(data) => {
+                                    sink(Message::Data(f(data)));
+                                }
+                                Message::Terminate => {
+                                    sink(Message::Terminate);
+                                }
+                                _ => {}
                             }
                         })
                         .into(),

@@ -69,20 +69,24 @@ where
             };
             sink(Message::Handshake(
                 ({
-                    move |t| {
+                    move |message| {
                         if completed.load(AtomicOrdering::Acquire) {
                             return;
                         }
 
-                        if let Message::Pull = t {
-                            got_pull.store(true, AtomicOrdering::Release);
-                            if !in_loop.load(AtomicOrdering::Acquire)
-                                && !res_done.load(AtomicOrdering::Acquire)
-                            {
-                                r#loop();
+                        match message {
+                            Message::Pull => {
+                                got_pull.store(true, AtomicOrdering::Release);
+                                if !in_loop.load(AtomicOrdering::Acquire)
+                                    && !res_done.load(AtomicOrdering::Acquire)
+                                {
+                                    r#loop();
+                                }
                             }
-                        } else if let Message::Terminate = t {
-                            completed.store(true, AtomicOrdering::Release);
+                            Message::Terminate => {
+                                completed.store(true, AtomicOrdering::Release);
+                            }
+                            _ => {}
                         }
                     }
                 })

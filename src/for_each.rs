@@ -17,8 +17,8 @@ where
         source(Message::Handshake(
             ({
                 let f = f.clone();
-                move |message| {
-                    if let Message::Handshake(source) = message {
+                move |message| match message {
+                    Message::Handshake(source) => {
                         {
                             let mut talkback = talkback.write().unwrap();
                             *talkback = Some(source);
@@ -26,12 +26,14 @@ where
                         let talkback = talkback.read().unwrap();
                         let talkback = talkback.as_ref().unwrap();
                         talkback(Message::Pull);
-                    } else if let Message::Data(data) = message {
+                    }
+                    Message::Data(data) => {
                         f(data);
                         let talkback = talkback.read().unwrap();
                         let talkback = talkback.as_ref().unwrap();
                         talkback(Message::Pull);
                     }
+                    _ => {}
                 }
             })
             .into(),
