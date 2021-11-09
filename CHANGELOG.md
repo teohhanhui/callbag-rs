@@ -2,6 +2,12 @@
 
 ##  Unreleased
 
+##  v0.3.0 - 2020-11-09
+
+### Added
+
+-   Implement `map` operator
+
 ##  v0.2.0 - 2021-11-04
 
 ### Added
