@@ -53,8 +53,10 @@ where
                             sink(Message::Terminate);
                             break;
                         } else {
-                            let mut res = res.write().unwrap();
-                            let res = res.take().unwrap();
+                            let res = {
+                                let mut res = res.write().unwrap();
+                                res.take().unwrap()
+                            };
                             sink(Message::Data(res));
                         }
                     }

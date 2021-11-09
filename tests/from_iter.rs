@@ -63,9 +63,11 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
                 talkback(Message::Pull);
                 return;
             } else if let Message::Data(data) = message {
-                let mut downwards_expected = downwards_expected.write().unwrap();
-                let e = downwards_expected.pop_front().unwrap();
-                assert_eq!(data, e, "downwards data is expected: {}", e);
+                {
+                    let mut downwards_expected = downwards_expected.write().unwrap();
+                    let e = downwards_expected.pop_front().unwrap();
+                    assert_eq!(data, e, "downwards data is expected: {}", e);
+                }
                 let talkback = talkback.read().unwrap();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
@@ -116,9 +118,11 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
                 talkback(Message::Pull);
                 return;
             } else if let Message::Data(data) = message {
-                let mut downwards_expected = downwards_expected.write().unwrap();
-                let e = downwards_expected.pop_front().unwrap();
-                assert_eq!(data, e, "downwards data is expected: {:?}", e);
+                {
+                    let mut downwards_expected = downwards_expected.write().unwrap();
+                    let e = downwards_expected.pop_front().unwrap();
+                    assert_eq!(data, e, "downwards data is expected: {:?}", e);
+                }
                 let talkback = talkback.read().unwrap();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);

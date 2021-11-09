@@ -47,10 +47,12 @@ fn it_iterates_a_finite_pullable_source() {
         Arc::new(RwLock::new(downwards_expected.into()));
 
     let sink = for_each(move |x| {
-        let mut downwards_expected = downwards_expected.write().unwrap();
         assert_eq!(
             x,
-            downwards_expected.pop_front().unwrap(),
+            {
+                let mut downwards_expected = downwards_expected.write().unwrap();
+                downwards_expected.pop_front().unwrap()
+            },
             "downwards data is expected"
         );
     });
@@ -70,9 +72,11 @@ fn it_iterates_a_finite_pullable_source() {
                     }
                     let sink_ref = sink_ref.read().unwrap();
                     let sink_ref = sink_ref.as_ref().unwrap();
-                    let mut source_ref = source_ref.write().unwrap();
-                    let source_ref = source_ref.take().unwrap();
-                    sink_ref(Message::Handshake(source_ref.into()));
+                    let source = {
+                        let mut source_ref = source_ref.write().unwrap();
+                        source_ref.take().unwrap()
+                    };
+                    sink_ref(Message::Handshake(source.into()));
                     return;
                 }
                 if sent.load(AtomicOrdering::Acquire) == 3 {
@@ -110,8 +114,10 @@ fn it_iterates_a_finite_pullable_source() {
                 }
             }
         };
-        let mut source_ref = source_ref.write().unwrap();
-        *source_ref = Some(Box::new(source.clone()));
+        {
+            let mut source_ref = source_ref.write().unwrap();
+            *source_ref = Some(Box::new(source.clone()));
+        }
         source.into()
     };
 
@@ -198,14 +204,18 @@ async fn it_observes_an_async_finite_listenable_source() {
                             })
                             .unwrap();
                         let sink = sink.read().unwrap();
-                        let mut source_ref = source_ref.write().unwrap();
-                        let source_ref = source_ref.take().unwrap();
-                        sink(Message::Handshake(source_ref.into()));
+                        let source = {
+                            let mut source_ref = source_ref.write().unwrap();
+                            source_ref.take().unwrap()
+                        };
+                        sink(Message::Handshake(source.into()));
                     }
                 }
             };
-            let mut source_ref = source_ref.write().unwrap();
-            *source_ref = Some(Box::new(source.clone()));
+            {
+                let mut source_ref = source_ref.write().unwrap();
+                *source_ref = Some(Box::new(source.clone()));
+            }
             source.into()
         }
     };
