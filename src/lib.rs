@@ -4,10 +4,12 @@ use std::ops::Deref;
 pub use crate::for_each::for_each;
 pub use crate::from_iter::from_iter;
 pub use crate::map::map;
+pub use crate::scan::scan;
 
 mod for_each;
 mod from_iter;
 mod map;
+mod scan;
 
 /// A message passed to a [`Callbag`].
 ///

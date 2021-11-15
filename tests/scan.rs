@@ -21,7 +21,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 ))]
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
-use callbag::{map, Message};
+use callbag::{scan, Message};
 
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -29,13 +29,13 @@ use callbag::{map, Message};
 ))]
 wasm_bindgen_test_configure!(run_in_browser);
 
-/// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/test.js#L4-L86>
+/// See <https://github.com/staltz/callbag-scan/blob/4ade1071e52f53a4b712d38f4e975f52ce8710c8/test.js#L4-L86>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
-fn it_maps_a_pullable_source() {
+fn it_scans_a_pullable_source() {
     let upwards_expected: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Pull), "Message::Pull"),
@@ -53,7 +53,7 @@ fn it_maps_a_pullable_source() {
     ];
     let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected_types.into()));
-    let downwards_expected = [1, 2, 3];
+    let downwards_expected = [1, 3, 6];
     let downwards_expected: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected.into()));
 
@@ -99,21 +99,21 @@ fn it_maps_a_pullable_source() {
                     sent.fetch_add(1, AtomicOrdering::AcqRel);
                     let sink_ref = sink_ref.read().unwrap();
                     let sink_ref = sink_ref.as_ref().unwrap();
-                    sink_ref(Message::Data(10));
+                    sink_ref(Message::Data(1));
                     return;
                 }
                 if sent.load(AtomicOrdering::Acquire) == 1 {
                     sent.fetch_add(1, AtomicOrdering::AcqRel);
                     let sink_ref = sink_ref.read().unwrap();
                     let sink_ref = sink_ref.as_ref().unwrap();
-                    sink_ref(Message::Data(20));
+                    sink_ref(Message::Data(2));
                     return;
                 }
                 if sent.load(AtomicOrdering::Acquire) == 2 {
                     sent.fetch_add(1, AtomicOrdering::AcqRel);
                     let sink_ref = sink_ref.read().unwrap();
                     let sink_ref = sink_ref.as_ref().unwrap();
-                    sink_ref(Message::Data(30));
+                    sink_ref(Message::Data(3));
                     return;
                 }
             }
@@ -158,12 +158,12 @@ fn it_maps_a_pullable_source() {
     };
 
     let source = make_source();
-    let mapped = map(move |x| (x as f32 * 0.1) as usize)(source);
+    let scanned = scan(move |prev, x| prev + x, 0)(source);
     let sink = make_sink();
-    mapped(Message::Handshake(sink));
+    scanned(Message::Handshake(sink));
 }
 
-/// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/test.js#L88-L154>
+/// See <https://github.com/staltz/callbag-scan/blob/4ade1071e52f53a4b712d38f4e975f52ce8710c8/test.js#L173-L241>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(
@@ -173,7 +173,7 @@ fn it_maps_a_pullable_source() {
     ),
     wasm_bindgen_test
 )]
-async fn it_maps_an_async_finite_source() {
+async fn it_scans_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let upwards_expected: Vec<(fn(&Message<_, _>) -> bool, &str)> =
         vec![(|m| matches!(m, Message::Handshake(_)), "Message::Handshake")];
@@ -187,7 +187,7 @@ async fn it_maps_an_async_finite_source() {
     ];
     let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected_types.into()));
-    let downwards_expected = [1, 2, 3];
+    let downwards_expected = [1, 3, 6];
     let downwards_expected: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected.into()));
 
@@ -221,19 +221,19 @@ async fn it_maps_an_async_finite_source() {
                                         if sent.load(AtomicOrdering::Acquire) == 0 {
                                             sent.fetch_add(1, AtomicOrdering::AcqRel);
                                             let sink = &*sink.read().unwrap();
-                                            sink(Message::Data(10));
+                                            sink(Message::Data(1));
                                             continue;
                                         }
                                         if sent.load(AtomicOrdering::Acquire) == 1 {
                                             sent.fetch_add(1, AtomicOrdering::AcqRel);
                                             let sink = &*sink.read().unwrap();
-                                            sink(Message::Data(20));
+                                            sink(Message::Data(2));
                                             continue;
                                         }
                                         if sent.load(AtomicOrdering::Acquire) == 2 {
                                             sent.fetch_add(1, AtomicOrdering::AcqRel);
                                             let sink = &*sink.read().unwrap();
-                                            sink(Message::Data(30));
+                                            sink(Message::Data(3));
                                             continue;
                                         }
                                         if sent.load(AtomicOrdering::Acquire) == 3 {
@@ -278,8 +278,8 @@ async fn it_maps_an_async_finite_source() {
     };
 
     let source = make_source();
-    let mapped = map(move |x| (x as f32 * 0.1) as usize)(source);
-    mapped(Message::Handshake(sink.into()));
+    let scanned = scan(move |acc, x| acc + x, 0)(source);
+    scanned(Message::Handshake(sink.into()));
 
     drop(nursery);
     async_std::future::timeout(Duration::from_millis(700), nursery_out)
@@ -287,7 +287,7 @@ async fn it_maps_an_async_finite_source() {
         .ok();
 }
 
-/// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/test.js#L156-L215>
+/// See <https://github.com/staltz/callbag-scan/blob/4ade1071e52f53a4b712d38f4e975f52ce8710c8/test.js#L314-L376>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(
@@ -312,7 +312,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     ];
     let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected_types.into()));
-    let downwards_expected = [1, 2, 3];
+    let downwards_expected = [1, 3, 6];
     let downwards_expected: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected.into()));
 
@@ -347,7 +347,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                                         interval.reset(DURATION);
                                         let sink = &*sink.read().unwrap();
                                         let sent = sent.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                        sink(Message::Data(sent * 10));
+                                        sink(Message::Data(sent));
                                     }
                                 }
                             })
@@ -398,9 +398,9 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     };
 
     let source = make_source();
-    let mapped = map(move |x| (x as f32 * 0.1) as usize)(source);
+    let scanned = scan(move |acc, x| acc + x, 0)(source);
     let sink = make_sink();
-    mapped(Message::Handshake(sink));
+    scanned(Message::Handshake(sink));
 
     drop(nursery);
     async_std::future::timeout(Duration::from_millis(700), nursery_out)

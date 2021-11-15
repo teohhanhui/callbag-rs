@@ -48,7 +48,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
     source(Message::Handshake(
         (move |message| {
             {
-                let mut downwards_expected_types = downwards_expected_types.write().unwrap();
+                let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
@@ -64,7 +64,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
                 return;
             } else if let Message::Data(data) = message {
                 {
-                    let mut downwards_expected = downwards_expected.write().unwrap();
+                    let downwards_expected = &mut *downwards_expected.write().unwrap();
                     let e = downwards_expected.pop_front().unwrap();
                     assert_eq!(data, e, "downwards data is expected: {}", e);
                 }
@@ -103,7 +103,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
     source(Message::Handshake(
         (move |message| {
             {
-                let mut downwards_expected_types = downwards_expected_types.write().unwrap();
+                let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
@@ -119,7 +119,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
                 return;
             } else if let Message::Data(data) = message {
                 {
-                    let mut downwards_expected = downwards_expected.write().unwrap();
+                    let downwards_expected = &mut *downwards_expected.write().unwrap();
                     let e = downwards_expected.pop_front().unwrap();
                     assert_eq!(data, e, "downwards data is expected: {:?}", e);
                 }
@@ -231,7 +231,7 @@ fn it_stops_sending_after_source_completion() {
             let actual = actual.clone();
             move |message| {
                 {
-                    let mut downwards_expected_types = downwards_expected_types.write().unwrap();
+                    let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
                     assert!(et.0(&message), "downwards type is expected: {}", et.1);
                 }
@@ -247,7 +247,7 @@ fn it_stops_sending_after_source_completion() {
                     return;
                 } else if let Message::Data(data) = message {
                     {
-                        let mut actual = actual.write().unwrap();
+                        let actual = &mut *actual.write().unwrap();
                         actual.push(data);
                     }
                     let talkback = talkback.read().unwrap();
@@ -261,5 +261,5 @@ fn it_stops_sending_after_source_completion() {
         .into(),
     ));
 
-    assert_eq!(&actual.read().unwrap()[..], [10]);
+    assert_eq!((&*actual.read().unwrap())[..], [10]);
 }

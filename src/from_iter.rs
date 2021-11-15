@@ -43,18 +43,18 @@ where
                     {
                         got_pull.store(false, AtomicOrdering::Release);
                         {
-                            let mut iter = iter.write().unwrap();
+                            let iter = &mut *iter.write().unwrap();
                             let mut res = res.write().unwrap();
                             *res = iter.next();
                             res_done.store(res.is_none(), AtomicOrdering::Release);
                         }
-                        let sink = sink.read().unwrap();
+                        let sink = &*sink.read().unwrap();
                         if res_done.load(AtomicOrdering::Acquire) {
                             sink(Message::Terminate);
                             break;
                         } else {
                             let res = {
-                                let mut res = res.write().unwrap();
+                                let res = &mut *res.write().unwrap();
                                 res.take().unwrap()
                             };
                             sink(Message::Data(res));
@@ -63,10 +63,7 @@ where
                     in_loop.store(false, AtomicOrdering::Release);
                 }
             };
-            let sink = {
-                let sink = sink.read().unwrap();
-                sink
-            };
+            let sink = &*sink.read().unwrap();
             sink(Message::Handshake(
                 ({
                     move |message| {
