@@ -2,6 +2,12 @@
 
 ##  Unreleased
 
+##  v0.5.0 - 2021-11-22
+
+### Added
+
+-   Implement `filter` operator
+
 ##  v0.4.0 - 2021-11-22
 
 ### Added
