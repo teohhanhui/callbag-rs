@@ -2,6 +2,12 @@
 
 ##  Unreleased
 
+##  v0.4.0 - 2021-11-22
+
+### Added
+
+-   Implement `scan` operator
+
 ##  v0.3.0 - 2021-11-09
 
 ### Added
