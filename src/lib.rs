@@ -1,11 +1,13 @@
 use never::Never;
 use std::ops::Deref;
 
+pub use crate::filter::filter;
 pub use crate::for_each::for_each;
 pub use crate::from_iter::from_iter;
 pub use crate::map::map;
 pub use crate::scan::scan;
 
+mod filter;
 mod for_each;
 mod from_iter;
 mod map;
