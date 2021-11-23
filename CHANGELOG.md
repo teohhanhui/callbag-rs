@@ -2,6 +2,8 @@
 
 ##  Unreleased
 
+##  v0.6.0 - 2021-11-24
+
 ### Added
 
 -   Implement `flatten` operator
