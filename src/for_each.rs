@@ -33,7 +33,11 @@ where
                         let talkback = talkback.as_ref().unwrap();
                         talkback(Message::Pull);
                     }
-                    _ => {}
+                    Message::Pull => {
+                        panic!("source must not pull");
+                    }
+                    Message::Error(_) => {}
+                    Message::Terminate => {}
                 }
             })
             .into(),

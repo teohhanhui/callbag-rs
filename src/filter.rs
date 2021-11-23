@@ -29,19 +29,27 @@ where
                                             *talkback = Some(source);
                                         }
                                         sink(Message::Handshake(
-                                            ({
-                                                move |message| match message {
-                                                    Message::Pull => {
-                                                        let talkback = talkback.read().unwrap();
-                                                        let source = talkback.as_ref().unwrap();
-                                                        source(Message::Pull);
-                                                    }
-                                                    Message::Terminate => {
-                                                        let talkback = talkback.read().unwrap();
-                                                        let source = talkback.as_ref().unwrap();
-                                                        source(Message::Terminate);
-                                                    }
-                                                    _ => {}
+                                            (move |message| match message {
+                                                Message::Handshake(_) => {
+                                                    panic!("sink handshake has already occurred");
+                                                }
+                                                Message::Data(_) => {
+                                                    panic!("sink must not send data");
+                                                }
+                                                Message::Pull => {
+                                                    let talkback = talkback.read().unwrap();
+                                                    let source = talkback.as_ref().unwrap();
+                                                    source(Message::Pull);
+                                                }
+                                                Message::Error(error) => {
+                                                    let talkback = talkback.read().unwrap();
+                                                    let source = talkback.as_ref().unwrap();
+                                                    source(Message::Error(error));
+                                                }
+                                                Message::Terminate => {
+                                                    let talkback = talkback.read().unwrap();
+                                                    let source = talkback.as_ref().unwrap();
+                                                    source(Message::Terminate);
                                                 }
                                             })
                                             .into(),
@@ -56,10 +64,15 @@ where
                                             talkback(Message::Pull);
                                         }
                                     }
+                                    Message::Pull => {
+                                        panic!("source must not pull");
+                                    }
+                                    Message::Error(error) => {
+                                        sink(Message::Error(error));
+                                    }
                                     Message::Terminate => {
                                         sink(Message::Terminate);
                                     }
-                                    _ => {}
                                 }
                             }
                         })

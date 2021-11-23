@@ -10,6 +10,7 @@ keywords = ["frp", "iterable", "observable", "reactive", "stream"]
 categories = ["asynchronous", "concurrency"]
 
 [dependencies]
+arc-swap = "1.5.0"
 never = "0.1.0"
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]

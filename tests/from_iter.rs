@@ -16,6 +16,8 @@ use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 use callbag::{from_iter, Message};
 
+type MessagePredicate<I, O> = fn(&Message<I, O>) -> bool;
+
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     feature = "browser",
@@ -31,7 +33,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 fn it_sends_array_items_iterable_to_a_puller_sink() {
     let source = from_iter([10, 20, 30]);
 
-    let downwards_expected_types: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
+    let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -61,7 +63,6 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
                 let talkback = talkback.read().unwrap();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
-                return;
             } else if let Message::Data(data) = message {
                 {
                     let downwards_expected = &mut *downwards_expected.write().unwrap();
@@ -86,7 +87,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
 fn it_sends_array_entries_iterator_to_a_puller_sink() {
     let source = from_iter(["a", "b", "c"].into_iter().enumerate());
 
-    let downwards_expected_types: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
+    let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -116,7 +117,6 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
                 let talkback = talkback.read().unwrap();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
-                return;
             } else if let Message::Data(data) = message {
                 {
                     let downwards_expected = &mut *downwards_expected.write().unwrap();
@@ -182,28 +182,24 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
                     let talkback = talkback.read().unwrap();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
-                    return;
                 } else if let Message::Data(_data) = message {
                     let talkback = talkback.read().unwrap();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
-                    return;
-                } else if let Message::Terminate = message {
+                } else if let Message::Error(_) | Message::Terminate = message {
                     assert_eq!(
                         i.load(AtomicOrdering::Acquire),
                         1_000_000,
                         "1 million items were iterated"
                     );
                     iterated.store(true, AtomicOrdering::Release);
-                    return;
                 }
             }
         })
         .into(),
     ));
-    assert_eq!(
+    assert!(
         iterated.load(AtomicOrdering::Acquire),
-        true,
         "iteration happened synchronously"
     );
 }
@@ -218,7 +214,7 @@ fn it_stops_sending_after_source_completion() {
     let source = from_iter([10, 20, 30]);
 
     let actual = Arc::new(RwLock::new(vec![]));
-    let downwards_expected_types: Vec<(fn(&Message<_, _>) -> bool, &str)> = vec![
+    let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
     ];
@@ -244,7 +240,6 @@ fn it_stops_sending_after_source_completion() {
                     let talkback = talkback.read().unwrap();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
-                    return;
                 } else if let Message::Data(data) = message {
                     {
                         let actual = &mut *actual.write().unwrap();

@@ -29,15 +29,21 @@ where
                             move |message| match message {
                                 Message::Handshake(source) => {
                                     sink(Message::Handshake(
-                                        ({
-                                            move |message| match message {
-                                                Message::Pull => {
-                                                    source(Message::Pull);
-                                                }
-                                                Message::Terminate => {
-                                                    source(Message::Terminate);
-                                                }
-                                                _ => {}
+                                        (move |message| match message {
+                                            Message::Handshake(_) => {
+                                                panic!("sink handshake has already occurred");
+                                            }
+                                            Message::Data(_) => {
+                                                panic!("sink must not send data");
+                                            }
+                                            Message::Pull => {
+                                                source(Message::Pull);
+                                            }
+                                            Message::Error(error) => {
+                                                source(Message::Error(error));
+                                            }
+                                            Message::Terminate => {
+                                                source(Message::Terminate);
                                             }
                                         })
                                         .into(),
@@ -54,10 +60,15 @@ where
                                     };
                                     sink(Message::Data(acc));
                                 }
+                                Message::Pull => {
+                                    panic!("source must not pull");
+                                }
+                                Message::Error(error) => {
+                                    sink(Message::Error(error));
+                                }
                                 Message::Terminate => {
                                     sink(Message::Terminate);
                                 }
-                                _ => {}
                             }
                         })
                         .into(),

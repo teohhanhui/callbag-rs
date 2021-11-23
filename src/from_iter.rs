@@ -17,14 +17,12 @@ pub fn from_iter<T: 'static, I: 'static>(iter: I) -> Source<T>
 where
     T: Send + Sync,
     I: IntoIterator<Item = T> + Send + Sync + Clone,
-    <I as std::iter::IntoIterator>::IntoIter: Send + Sync,
+    <I as IntoIterator>::IntoIter: Send + Sync,
 {
     (move |message| {
         if let Message::Handshake(sink) = message {
             let iter = Arc::new(RwLock::new(iter.clone().into_iter()));
-            let sink = Arc::new(RwLock::new(move |message| {
-                sink(message);
-            }));
+            let sink = Arc::new(sink);
             let in_loop = Arc::new(AtomicBool::new(false));
             let got_pull = Arc::new(AtomicBool::new(false));
             let completed = Arc::new(AtomicBool::new(false));
@@ -48,7 +46,6 @@ where
                             *res = iter.next();
                             res_done.store(res.is_none(), AtomicOrdering::Release);
                         }
-                        let sink = &*sink.read().unwrap();
                         if res_done.load(AtomicOrdering::Acquire) {
                             sink(Message::Terminate);
                             break;
@@ -63,27 +60,29 @@ where
                     in_loop.store(false, AtomicOrdering::Release);
                 }
             };
-            let sink = &*sink.read().unwrap();
             sink(Message::Handshake(
-                ({
-                    move |message| {
-                        if completed.load(AtomicOrdering::Acquire) {
-                            return;
-                        }
+                (move |message| {
+                    if completed.load(AtomicOrdering::Acquire) {
+                        return;
+                    }
 
-                        match message {
-                            Message::Pull => {
-                                got_pull.store(true, AtomicOrdering::Release);
-                                if !in_loop.load(AtomicOrdering::Acquire)
-                                    && !res_done.load(AtomicOrdering::Acquire)
-                                {
-                                    r#loop();
-                                }
+                    match message {
+                        Message::Handshake(_) => {
+                            panic!("sink handshake has already occurred");
+                        }
+                        Message::Data(_) => {
+                            panic!("sink must not send data");
+                        }
+                        Message::Pull => {
+                            got_pull.store(true, AtomicOrdering::Release);
+                            if !in_loop.load(AtomicOrdering::Acquire)
+                                && !res_done.load(AtomicOrdering::Acquire)
+                            {
+                                r#loop();
                             }
-                            Message::Terminate => {
-                                completed.store(true, AtomicOrdering::Release);
-                            }
-                            _ => {}
+                        }
+                        Message::Error(_) | Message::Terminate => {
+                            completed.store(true, AtomicOrdering::Release);
                         }
                     }
                 })
