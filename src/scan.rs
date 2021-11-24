@@ -1,4 +1,5 @@
-use std::sync::{Arc, RwLock};
+use arc_swap::ArcSwap;
+use std::sync::Arc;
 
 use crate::{Message, Source};
 
@@ -22,7 +23,7 @@ where
             let seed = seed.clone();
             move |message| {
                 if let Message::Handshake(sink) = message {
-                    let acc = Arc::new(RwLock::new(seed.clone()));
+                    let acc = ArcSwap::from_pointee(seed.clone());
                     source(Message::Handshake(
                         ({
                             let reducer = reducer.clone();
@@ -50,15 +51,8 @@ where
                                     ));
                                 }
                                 Message::Data(data) => {
-                                    {
-                                        let mut acc = acc.write().unwrap();
-                                        *acc = reducer(acc.clone(), data);
-                                    }
-                                    let acc = {
-                                        let acc = &*acc.read().unwrap();
-                                        acc.clone()
-                                    };
-                                    sink(Message::Data(acc));
+                                    acc.store(Arc::new(reducer((**acc.load()).clone(), data)));
+                                    sink(Message::Data((**acc.load()).clone()));
                                 }
                                 Message::Pull => {
                                     panic!("source must not pull");

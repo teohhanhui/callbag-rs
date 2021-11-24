@@ -1,4 +1,5 @@
-use std::sync::{Arc, RwLock};
+use arc_swap::ArcSwapOption;
+use std::sync::Arc;
 
 use crate::{Message, Source};
 
@@ -16,7 +17,7 @@ where
             let condition = condition.clone();
             move |message| {
                 if let Message::Handshake(sink) = message {
-                    let talkback = Arc::new(RwLock::new(None));
+                    let talkback = Arc::new(ArcSwapOption::from(None));
                     source(Message::Handshake(
                         ({
                             let condition = condition.clone();
@@ -24,10 +25,7 @@ where
                                 let talkback = talkback.clone();
                                 match message {
                                     Message::Handshake(source) => {
-                                        {
-                                            let mut talkback = talkback.write().unwrap();
-                                            *talkback = Some(source);
-                                        }
+                                        talkback.store(Some(Arc::new(source)));
                                         sink(Message::Handshake(
                                             (move |message| match message {
                                                 Message::Handshake(_) => {
@@ -37,17 +35,17 @@ where
                                                     panic!("sink must not send data");
                                                 }
                                                 Message::Pull => {
-                                                    let talkback = talkback.read().unwrap();
+                                                    let talkback = talkback.load();
                                                     let source = talkback.as_ref().unwrap();
                                                     source(Message::Pull);
                                                 }
                                                 Message::Error(error) => {
-                                                    let talkback = talkback.read().unwrap();
+                                                    let talkback = talkback.load();
                                                     let source = talkback.as_ref().unwrap();
                                                     source(Message::Error(error));
                                                 }
                                                 Message::Terminate => {
-                                                    let talkback = talkback.read().unwrap();
+                                                    let talkback = talkback.load();
                                                     let source = talkback.as_ref().unwrap();
                                                     source(Message::Terminate);
                                                 }
@@ -59,7 +57,7 @@ where
                                         if condition(&data) {
                                             sink(Message::Data(data));
                                         } else {
-                                            let talkback = talkback.read().unwrap();
+                                            let talkback = talkback.load();
                                             let talkback = talkback.as_ref().unwrap();
                                             talkback(Message::Pull);
                                         }

@@ -1,3 +1,4 @@
+use arc_swap::ArcSwapOption;
 use std::{
     collections::VecDeque,
     sync::{
@@ -61,17 +62,14 @@ fn it_iterates_a_finite_pullable_source() {
 
     let make_source = move || {
         let sent = Arc::new(AtomicUsize::new(0));
-        let sink_ref = Arc::new(RwLock::new(None));
+        let sink_ref = Arc::new(ArcSwapOption::from(None));
         let source_ref: Arc<RwLock<Option<CallbagFn<_, _>>>> = Arc::new(RwLock::new(None));
         let source = {
             let source_ref = source_ref.clone();
             move |message| {
                 if let Message::Handshake(sink) = message {
-                    {
-                        let mut sink_ref = sink_ref.write().unwrap();
-                        *sink_ref = Some(sink);
-                    }
-                    let sink_ref = sink_ref.read().unwrap();
+                    sink_ref.store(Some(Arc::new(sink)));
+                    let sink_ref = sink_ref.load();
                     let sink_ref = sink_ref.as_ref().unwrap();
                     let source = {
                         let source_ref = &mut *source_ref.write().unwrap();
@@ -81,7 +79,7 @@ fn it_iterates_a_finite_pullable_source() {
                     return;
                 }
                 if sent.load(AtomicOrdering::Acquire) == 3 {
-                    let sink_ref = sink_ref.read().unwrap();
+                    let sink_ref = sink_ref.load();
                     let sink_ref = sink_ref.as_ref().unwrap();
                     sink_ref(Message::Terminate);
                     return;
@@ -94,21 +92,21 @@ fn it_iterates_a_finite_pullable_source() {
                 }
                 if sent.load(AtomicOrdering::Acquire) == 0 {
                     sent.fetch_add(1, AtomicOrdering::AcqRel);
-                    let sink_ref = sink_ref.read().unwrap();
+                    let sink_ref = sink_ref.load();
                     let sink_ref = sink_ref.as_ref().unwrap();
                     sink_ref(Message::Data("a"));
                     return;
                 }
                 if sent.load(AtomicOrdering::Acquire) == 1 {
                     sent.fetch_add(1, AtomicOrdering::AcqRel);
-                    let sink_ref = sink_ref.read().unwrap();
+                    let sink_ref = sink_ref.load();
                     let sink_ref = sink_ref.as_ref().unwrap();
                     sink_ref(Message::Data("b"));
                     return;
                 }
                 if sent.load(AtomicOrdering::Acquire) == 2 {
                     sent.fetch_add(1, AtomicOrdering::AcqRel);
-                    let sink_ref = sink_ref.read().unwrap();
+                    let sink_ref = sink_ref.load();
                     let sink_ref = sink_ref.as_ref().unwrap();
                     sink_ref(Message::Data("c"));
                 }

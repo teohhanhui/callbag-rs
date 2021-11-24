@@ -1,4 +1,5 @@
-use std::sync::{Arc, RwLock};
+use arc_swap::ArcSwapOption;
+use std::sync::Arc;
 
 use crate::{Message, Source};
 
@@ -13,23 +14,20 @@ where
     F: Fn(T) + Send + Sync + Clone,
 {
     Box::new(move |source| {
-        let talkback = Arc::new(RwLock::new(None));
+        let talkback = ArcSwapOption::from(None);
         source(Message::Handshake(
             ({
                 let f = f.clone();
                 move |message| match message {
                     Message::Handshake(source) => {
-                        {
-                            let mut talkback = talkback.write().unwrap();
-                            *talkback = Some(source);
-                        }
-                        let talkback = talkback.read().unwrap();
+                        talkback.store(Some(Arc::new(source)));
+                        let talkback = talkback.load();
                         let talkback = talkback.as_ref().unwrap();
                         talkback(Message::Pull);
                     }
                     Message::Data(data) => {
                         f(data);
-                        let talkback = talkback.read().unwrap();
+                        let talkback = talkback.load();
                         let talkback = talkback.as_ref().unwrap();
                         talkback(Message::Pull);
                     }

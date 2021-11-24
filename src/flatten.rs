@@ -29,9 +29,7 @@ pub fn flatten<T: 'static>(source: Source<Source<T>>) -> Source<T> {
                     Message::Pull => {
                         if let Some(inner_talkback) = &*inner_talkback.load() {
                             inner_talkback(Message::Pull);
-                            return;
-                        }
-                        if let Some(outer_talkback) = &*outer_talkback.load() {
+                        } else if let Some(outer_talkback) = &*outer_talkback.load() {
                             outer_talkback(Message::Pull);
                         }
                     }
@@ -82,12 +80,12 @@ pub fn flatten<T: 'static>(source: Source<Source<T>>) -> Source<T> {
                                     Message::Terminate => {
                                         if outer_talkback.load().is_none() {
                                             sink(Message::Terminate);
-                                            return;
+                                        } else {
+                                            inner_talkback.store(None);
+                                            let outer_talkback = outer_talkback.load();
+                                            let outer_talkback = outer_talkback.as_ref().unwrap();
+                                            outer_talkback(Message::Pull);
                                         }
-                                        inner_talkback.store(None);
-                                        let outer_talkback = outer_talkback.load();
-                                        let outer_talkback = outer_talkback.as_ref().unwrap();
-                                        outer_talkback(Message::Pull);
                                     }
                                 })
                                 .into(),
@@ -105,9 +103,9 @@ pub fn flatten<T: 'static>(source: Source<Source<T>>) -> Source<T> {
                         Message::Terminate => {
                             if inner_talkback.load().is_none() {
                                 sink(Message::Terminate);
-                                return;
+                            } else {
+                                outer_talkback.store(None);
                             }
-                            outer_talkback.store(None);
                         }
                     }
                 })

@@ -1,3 +1,4 @@
+use arc_swap::ArcSwapOption;
 use std::{
     collections::VecDeque,
     sync::{
@@ -46,7 +47,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
     let downwards_expected: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected.into()));
 
-    let talkback = Arc::new(RwLock::new(None));
+    let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(
         (move |message| {
             {
@@ -56,11 +57,8 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
             }
 
             if let Message::Handshake(source) = message {
-                {
-                    let mut talkback = talkback.write().unwrap();
-                    *talkback = Some(source);
-                }
-                let talkback = talkback.read().unwrap();
+                talkback.store(Some(Arc::new(source)));
+                let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
             } else if let Message::Data(data) = message {
@@ -69,7 +67,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
                     let e = downwards_expected.pop_front().unwrap();
                     assert_eq!(data, e, "downwards data is expected: {}", e);
                 }
-                let talkback = talkback.read().unwrap();
+                let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
             }
@@ -100,7 +98,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
     let downwards_expected: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected.into()));
 
-    let talkback = Arc::new(RwLock::new(None));
+    let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(
         (move |message| {
             {
@@ -110,11 +108,8 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
             }
 
             if let Message::Handshake(source) = message {
-                {
-                    let mut talkback = talkback.write().unwrap();
-                    *talkback = Some(source);
-                }
-                let talkback = talkback.read().unwrap();
+                talkback.store(Some(Arc::new(source)));
+                let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
             } else if let Message::Data(data) = message {
@@ -123,7 +118,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
                     let e = downwards_expected.pop_front().unwrap();
                     assert_eq!(data, e, "downwards data is expected: {:?}", e);
                 }
-                let talkback = talkback.read().unwrap();
+                let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
             }
@@ -168,22 +163,19 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     let gen = Gen::new(i.clone());
     let source = from_iter(gen);
 
-    let talkback = Arc::new(RwLock::new(None));
+    let talkback = ArcSwapOption::from(None);
     let iterated = Arc::new(AtomicBool::new(false));
     source(Message::Handshake(
         ({
             let iterated = iterated.clone();
             move |message| {
                 if let Message::Handshake(source) = message {
-                    {
-                        let mut talkback = talkback.write().unwrap();
-                        *talkback = Some(source);
-                    }
-                    let talkback = talkback.read().unwrap();
+                    talkback.store(Some(Arc::new(source)));
+                    let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
                 } else if let Message::Data(_data) = message {
-                    let talkback = talkback.read().unwrap();
+                    let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
                 } else if let Message::Error(_) | Message::Terminate = message {
@@ -221,7 +213,7 @@ fn it_stops_sending_after_source_completion() {
     let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
         Arc::new(RwLock::new(downwards_expected_types.into()));
 
-    let talkback = Arc::new(RwLock::new(None));
+    let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(
         ({
             let actual = actual.clone();
@@ -233,11 +225,8 @@ fn it_stops_sending_after_source_completion() {
                 }
 
                 if let Message::Handshake(source) = message {
-                    {
-                        let mut talkback = talkback.write().unwrap();
-                        *talkback = Some(source);
-                    }
-                    let talkback = talkback.read().unwrap();
+                    talkback.store(Some(Arc::new(source)));
+                    let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
                 } else if let Message::Data(data) = message {
@@ -245,7 +234,7 @@ fn it_stops_sending_after_source_completion() {
                         let actual = &mut *actual.write().unwrap();
                         actual.push(data);
                     }
-                    let talkback = talkback.read().unwrap();
+                    let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Terminate);
                     talkback(Message::Pull);
