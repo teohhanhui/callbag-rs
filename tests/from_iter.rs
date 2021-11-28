@@ -7,6 +7,8 @@ use std::{
     },
 };
 
+use crate::common::MessagePredicate;
+
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(all(
@@ -17,7 +19,7 @@ use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 use callbag::{from_iter, Message};
 
-type MessagePredicate<I, O> = fn(&Message<I, O>) -> bool;
+pub mod common;
 
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
