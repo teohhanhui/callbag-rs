@@ -9,9 +9,12 @@ use std::{
 
 use crate::common::MessagePredicate;
 
+use callbag::{flatten, map, CallbagFn, Message};
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+use crate::common::never;
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
-    crate::common::never,
     async_nursery::{NurseExt, Nursery},
     futures_timer::Delay,
     never::Never,
@@ -25,8 +28,6 @@ use wasm_bindgen_test::wasm_bindgen_test;
     feature = "browser",
 ))]
 use wasm_bindgen_test::wasm_bindgen_test_configure;
-
-use callbag::{flatten, map, CallbagFn, Message};
 
 pub mod common;
 

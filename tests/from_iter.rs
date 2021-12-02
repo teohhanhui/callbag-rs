@@ -9,6 +9,8 @@ use std::{
 
 use crate::common::MessagePredicate;
 
+use callbag::{from_iter, Message};
+
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(all(
@@ -16,8 +18,6 @@ use wasm_bindgen_test::wasm_bindgen_test;
     feature = "browser",
 ))]
 use wasm_bindgen_test::wasm_bindgen_test_configure;
-
-use callbag::{from_iter, Message};
 
 pub mod common;
 

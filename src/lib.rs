@@ -7,6 +7,7 @@ pub use crate::for_each::for_each;
 pub use crate::from_iter::from_iter;
 pub use crate::map::map;
 pub use crate::scan::scan;
+pub use crate::take::take;
 
 mod filter;
 mod flatten;
@@ -14,6 +15,7 @@ mod for_each;
 mod from_iter;
 mod map;
 mod scan;
+mod take;
 
 /// A message passed to a [`Callbag`].
 ///

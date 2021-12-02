@@ -13,6 +13,8 @@ categories = ["asynchronous", "concurrency"]
 arc-swap = "1.5.0"
 never = "0.1.0"
 
+[dev-dependencies]
+
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes", "unstable"] }
 async_executors = { version = "0.4.2", features = ["async_std"] }
