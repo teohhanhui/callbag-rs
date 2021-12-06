@@ -433,7 +433,6 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                         let upwards_expected = &mut *upwards_expected.write().unwrap();
                         let e = upwards_expected.pop_front().unwrap();
                         assert!(e.0(&message), "upwards type is expected: {}", e.1);
-                        println!("up: {}", e.1);
                     }
                     if let Message::Handshake(sink) = message {
                         let sink = Arc::new(sink);
@@ -482,7 +481,6 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
-                println!("down: {}", et.1);
             }
             if let Message::Handshake(source) = message {
                 talkback.store(Some(Arc::new(source)));
@@ -490,7 +488,6 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                 let downwards_expected = &mut *downwards_expected.write().unwrap();
                 let e = downwards_expected.pop_front().unwrap();
                 assert_eq!(data, e, "downwards data is expected: {}", e);
-                println!("down: {}", e);
             }
             let downwards_expected = &*downwards_expected.read().unwrap();
             if downwards_expected.is_empty() {

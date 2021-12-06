@@ -1,5 +1,5 @@
 use never::Never;
-use std::{error::Error, ops::Deref};
+use std::{error::Error, fmt::Debug, ops::Deref};
 
 pub use crate::filter::filter;
 pub use crate::flatten::flatten;
@@ -22,6 +22,7 @@ mod take;
 /// A message passed to a [`Callbag`].
 ///
 /// See <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L12-L22>
+#[derive(Debug)]
 pub enum Message<I, O> {
     Handshake(Callbag<O, I>),
     Data(I),
@@ -61,5 +62,16 @@ impl<I, O> Deref for Callbag<I, O> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<I, O> Debug for Callbag<I, O> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CallbagFn(Message<{}, {}>)",
+            std::any::type_name::<I>(),
+            std::any::type_name::<O>()
+        )
     }
 }

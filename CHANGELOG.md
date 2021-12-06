@@ -2,6 +2,10 @@
 
 ##  Unreleased
 
+### Changed
+
+-   Implement `Debug` for `Callbag` and `Message` types
+
 ##  v0.7.0 - 2021-12-06
 
 ### Added
