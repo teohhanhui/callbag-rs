@@ -18,7 +18,11 @@ use {
     async_nursery::{NurseExt, Nursery},
     futures_timer::Delay,
     never::Never,
-    std::{pin::Pin, sync::atomic::AtomicBool, time::Duration},
+    std::{
+        pin::Pin,
+        sync::{atomic::AtomicBool, Condvar, Mutex},
+        time::Duration,
+    },
 };
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -741,6 +745,8 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for_inner_completion()
 {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    #[allow(clippy::mutex_atomic)]
+    let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> =
         vec![(|m| matches!(m, Message::Handshake(_)), "Message::Handshake")];
     let outer_expected_types: Arc<RwLock<VecDeque<_>>> =
@@ -753,6 +759,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
     let source_outer = {
         let source_outer_ref: Arc<RwLock<Option<CallbagFn<_, _>>>> = Arc::new(RwLock::new(None));
         let source_outer = {
+            let outer_completed_pair = outer_completed_pair.clone();
             let source_outer_ref = source_outer_ref.clone();
             move |message| {
                 {
@@ -771,6 +778,12 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                     }
                     sink(Message::Data(true));
                     sink(Message::Terminate);
+                    {
+                        let (lock, cvar) = &*outer_completed_pair;
+                        let mut outer_completed = lock.lock().unwrap();
+                        *outer_completed = true;
+                        cvar.notify_one();
+                    }
                 }
             }
         };
@@ -793,8 +806,18 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                 let talkback = Arc::new(source);
                 nursery
                     .clone()
-                    .nurse(async move {
-                        talkback(Message::Terminate);
+                    .nurse({
+                        let outer_completed_pair = outer_completed_pair.clone();
+                        async move {
+                            {
+                                let (lock, cvar) = &*outer_completed_pair;
+                                let mut outer_completed = lock.lock().unwrap();
+                                while !*outer_completed {
+                                    outer_completed = cvar.wait(outer_completed).unwrap();
+                                }
+                            }
+                            talkback(Message::Terminate);
+                        }
                     })
                     .unwrap();
             }
@@ -822,6 +845,8 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
 )]
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_errors() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    #[allow(clippy::mutex_atomic)]
+    let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> =
         vec![(|m| matches!(m, Message::Handshake(_)), "Message::Handshake")];
     let outer_expected_types: Arc<RwLock<VecDeque<_>>> =
@@ -836,6 +861,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
     let source_outer = {
         let source_outer_ref: Arc<RwLock<Option<CallbagFn<_, _>>>> = Arc::new(RwLock::new(None));
         let source_outer = {
+            let outer_completed_pair = outer_completed_pair.clone();
             let source_outer_ref = source_outer_ref.clone();
             move |message| {
                 {
@@ -854,6 +880,12 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                     }
                     sink(Message::Data(true));
                     sink(Message::Terminate);
+                    {
+                        let (lock, cvar) = &*outer_completed_pair;
+                        let mut outer_completed = lock.lock().unwrap();
+                        *outer_completed = true;
+                        cvar.notify_one();
+                    }
                 }
             }
         };
@@ -881,8 +913,18 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                     }
                     nursery
                         .clone()
-                        .nurse(async move {
-                            sink(Message::Error("true".into()));
+                        .nurse({
+                            let outer_completed_pair = outer_completed_pair.clone();
+                            async move {
+                                {
+                                    let (lock, cvar) = &*outer_completed_pair;
+                                    let mut outer_completed = lock.lock().unwrap();
+                                    while !*outer_completed {
+                                        outer_completed = cvar.wait(outer_completed).unwrap();
+                                    }
+                                }
+                                sink(Message::Error("true".into()));
+                            }
                         })
                         .unwrap();
                 }
