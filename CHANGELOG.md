@@ -2,6 +2,8 @@
 
 ##  Unreleased
 
+##  v0.7.0 - 2021-12-06
+
 ### Added
 
 -   Implement `take` operator

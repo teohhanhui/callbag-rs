@@ -1,6 +1,6 @@
 [package]
 name = "callbag"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Teoh Han Hui <teohhanhui@gmail.com>"]
 edition = "2021"
 description = "An implementation of the callbag spec"
