@@ -6,7 +6,9 @@ use crate::{Message, Source};
 /// Callbag operator that flattens a higher-order callbag source.
 ///
 /// Like RxJS "switch" or xstream "flatten". Use it with map to get behavior equivalent to
-/// "switchMap". Works on either pullable or listenable sources.
+/// "switchMap".
+///
+/// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/index.js#L1-L43>
 pub fn flatten<T: 'static>(source: Source<Source<T>>) -> Source<T> {

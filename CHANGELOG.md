@@ -5,6 +5,7 @@
 ### Added
 
 -   Implement `take` operator
+-   Implement `skip` operator
 
 ##  v0.6.0 - 2021-11-24
 

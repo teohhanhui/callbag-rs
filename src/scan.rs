@@ -6,7 +6,9 @@ use crate::{Message, Source};
 /// Callbag operator that combines consecutive values from the same source.
 ///
 /// It's essentially like array `.reduce`, but delivers a new accumulated value for each value from
-/// the callbag source. Works on either pullable or listenable sources.
+/// the callbag source.
+///
+/// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-scan/blob/4ade1071e52f53a4b712d38f4e975f52ce8710c8/readme.js#L28-L40>
 pub fn scan<I: 'static, O: 'static, F: 'static>(
