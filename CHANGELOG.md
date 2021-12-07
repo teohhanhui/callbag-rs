@@ -2,6 +2,10 @@
 
 ##  Unreleased
 
+### Added
+
+-   Implement `pipe`
+
 ##  v0.8.0 - 2021-12-07
 
 ### Changed

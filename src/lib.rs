@@ -15,6 +15,7 @@ mod flatten;
 mod for_each;
 mod from_iter;
 mod map;
+mod pipe;
 mod scan;
 mod skip;
 mod take;
