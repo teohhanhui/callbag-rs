@@ -50,8 +50,9 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
         Arc::new(RwLock::new(downwards_expected.into()));
 
     let talkback = ArcSwapOption::from(None);
-    source(Message::Handshake(
+    source(Message::Handshake(Arc::new(
         (move |message| {
+            println!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -59,7 +60,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
             }
 
             if let Message::Handshake(source) = message {
-                talkback.store(Some(Arc::new(source)));
+                talkback.store(Some(source));
                 let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
@@ -75,7 +76,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
             }
         })
         .into(),
-    ));
+    )));
 }
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L36-L66>
@@ -101,8 +102,9 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
         Arc::new(RwLock::new(downwards_expected.into()));
 
     let talkback = ArcSwapOption::from(None);
-    source(Message::Handshake(
+    source(Message::Handshake(Arc::new(
         (move |message| {
+            println!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -110,7 +112,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
             }
 
             if let Message::Handshake(source) = message {
-                talkback.store(Some(Arc::new(source)));
+                talkback.store(Some(source));
                 let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
                 talkback(Message::Pull);
@@ -126,7 +128,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
             }
         })
         .into(),
-    ));
+    )));
 }
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97>
@@ -162,17 +164,18 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     }
 
     let i = Arc::new(AtomicUsize::new(0));
-    let gen = Gen::new(i.clone());
+    let gen = Gen::new(Arc::clone(&i));
     let source = from_iter(gen);
 
     let talkback = ArcSwapOption::from(None);
     let iterated = Arc::new(AtomicBool::new(false));
-    source(Message::Handshake(
-        ({
+    source(Message::Handshake(Arc::new(
+        {
             let iterated = iterated.clone();
             move |message| {
+                // println!("down: {:?}", message); // don't blow up stdout
                 if let Message::Handshake(source) = message {
-                    talkback.store(Some(Arc::new(source)));
+                    talkback.store(Some(source));
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
@@ -189,9 +192,9 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
                     iterated.store(true, AtomicOrdering::Release);
                 }
             }
-        })
+        }
         .into(),
-    ));
+    )));
     assert!(
         iterated.load(AtomicOrdering::Acquire),
         "iteration happened synchronously"
@@ -216,10 +219,11 @@ fn it_stops_sending_after_source_completion() {
         Arc::new(RwLock::new(downwards_expected_types.into()));
 
     let talkback = ArcSwapOption::from(None);
-    source(Message::Handshake(
-        ({
-            let actual = actual.clone();
+    source(Message::Handshake(Arc::new(
+        {
+            let actual = Arc::clone(&actual);
             move |message| {
+                println!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -227,7 +231,7 @@ fn it_stops_sending_after_source_completion() {
                 }
 
                 if let Message::Handshake(source) = message {
-                    talkback.store(Some(Arc::new(source)));
+                    talkback.store(Some(source));
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
@@ -243,9 +247,9 @@ fn it_stops_sending_after_source_completion() {
                     talkback(Message::Pull);
                 }
             }
-        })
+        }
         .into(),
-    ));
+    )));
 
     assert_eq!((&*actual.read().unwrap())[..], [10]);
 }

@@ -9,7 +9,7 @@ use std::{
 
 use crate::common::MessagePredicate;
 
-use callbag::{for_each, CallbagFn, Message};
+use callbag::{for_each, Message, Source};
 
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
@@ -52,6 +52,7 @@ fn it_iterates_a_finite_pullable_source() {
         Arc::new(RwLock::new(downwards_expected.into()));
 
     let sink = for_each(move |x| {
+        println!("down: {}", x);
         assert_eq!(
             x,
             {
@@ -65,64 +66,68 @@ fn it_iterates_a_finite_pullable_source() {
     let make_source = move || {
         let sent = Arc::new(AtomicUsize::new(0));
         let sink_ref = Arc::new(ArcSwapOption::from(None));
-        let source_ref: Arc<RwLock<Option<CallbagFn<_, _>>>> = Arc::new(RwLock::new(None));
-        let source = {
-            let source_ref = source_ref.clone();
-            move |message| {
-                if let Message::Handshake(sink) = message {
-                    sink_ref.store(Some(Arc::new(sink)));
-                    let sink_ref = sink_ref.load();
-                    let sink_ref = sink_ref.as_ref().unwrap();
-                    let source = {
-                        let source_ref = &mut *source_ref.write().unwrap();
-                        source_ref.take().unwrap()
-                    };
-                    sink_ref(Message::Handshake(source.into()));
-                    return;
-                }
-                if sent.load(AtomicOrdering::Acquire) == 3 {
-                    let sink_ref = sink_ref.load();
-                    let sink_ref = sink_ref.as_ref().unwrap();
-                    sink_ref(Message::Terminate);
-                    return;
-                }
-                {
-                    let upwards_expected = &mut *upwards_expected.write().unwrap();
-                    assert!(!upwards_expected.is_empty(), "source can be pulled");
-                    let expected = upwards_expected.pop_front().unwrap();
-                    assert!(expected.0(&message), "upwards type is expected");
-                }
-                if sent.load(AtomicOrdering::Acquire) == 0 {
-                    sent.fetch_add(1, AtomicOrdering::AcqRel);
-                    let sink_ref = sink_ref.load();
-                    let sink_ref = sink_ref.as_ref().unwrap();
-                    sink_ref(Message::Data("a"));
-                    return;
-                }
-                if sent.load(AtomicOrdering::Acquire) == 1 {
-                    sent.fetch_add(1, AtomicOrdering::AcqRel);
-                    let sink_ref = sink_ref.load();
-                    let sink_ref = sink_ref.as_ref().unwrap();
-                    sink_ref(Message::Data("b"));
-                    return;
-                }
-                if sent.load(AtomicOrdering::Acquire) == 2 {
-                    sent.fetch_add(1, AtomicOrdering::AcqRel);
-                    let sink_ref = sink_ref.load();
-                    let sink_ref = sink_ref.as_ref().unwrap();
-                    sink_ref(Message::Data("c"));
+        let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
+        let source = Arc::new(
+            {
+                let source_ref = Arc::clone(&source_ref);
+                move |message| {
+                    println!("up: {:?}", message);
+                    if let Message::Handshake(sink) = message {
+                        sink_ref.store(Some(sink));
+                        let sink_ref = sink_ref.load();
+                        let sink_ref = sink_ref.as_ref().unwrap();
+                        let source = {
+                            let source_ref = &mut *source_ref.write().unwrap();
+                            source_ref.take().unwrap()
+                        };
+                        sink_ref(Message::Handshake(source));
+                        return;
+                    }
+                    if sent.load(AtomicOrdering::Acquire) == 3 {
+                        let sink_ref = sink_ref.load();
+                        let sink_ref = sink_ref.as_ref().unwrap();
+                        sink_ref(Message::Terminate);
+                        return;
+                    }
+                    {
+                        let upwards_expected = &mut *upwards_expected.write().unwrap();
+                        assert!(!upwards_expected.is_empty(), "source can be pulled");
+                        let expected = upwards_expected.pop_front().unwrap();
+                        assert!(expected.0(&message), "upwards type is expected");
+                    }
+                    if sent.load(AtomicOrdering::Acquire) == 0 {
+                        sent.fetch_add(1, AtomicOrdering::AcqRel);
+                        let sink_ref = sink_ref.load();
+                        let sink_ref = sink_ref.as_ref().unwrap();
+                        sink_ref(Message::Data("a"));
+                        return;
+                    }
+                    if sent.load(AtomicOrdering::Acquire) == 1 {
+                        sent.fetch_add(1, AtomicOrdering::AcqRel);
+                        let sink_ref = sink_ref.load();
+                        let sink_ref = sink_ref.as_ref().unwrap();
+                        sink_ref(Message::Data("b"));
+                        return;
+                    }
+                    if sent.load(AtomicOrdering::Acquire) == 2 {
+                        sent.fetch_add(1, AtomicOrdering::AcqRel);
+                        let sink_ref = sink_ref.load();
+                        let sink_ref = sink_ref.as_ref().unwrap();
+                        sink_ref(Message::Data("c"));
+                    }
                 }
             }
-        };
+            .into(),
+        );
         {
             let mut source_ref = source_ref.write().unwrap();
-            *source_ref = Some(Box::new(source.clone()));
+            *source_ref = Some(Arc::clone(&source));
         }
         source
     };
 
     let source = make_source();
-    sink(source.into());
+    sink(source);
 }
 
 /// See <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L52-L109>
@@ -153,62 +158,65 @@ async fn it_observes_an_async_finite_listenable_source() {
         let nursery = nursery.clone();
         move || {
             let sent = Arc::new(AtomicUsize::new(0));
-            let source_ref: Arc<RwLock<Option<CallbagFn<_, _>>>> = Arc::new(RwLock::new(None));
-            let source = {
-                let source_ref = source_ref.clone();
-                move |message| {
-                    {
-                        let upwards_expected = &mut *upwards_expected.write().unwrap();
-                        let e = upwards_expected.pop_front().unwrap();
-                        assert!(e.0(&message), "upwards type is expected: {}", e.1);
-                    }
-                    if let Message::Handshake(sink) = message {
-                        let sink = Arc::new(sink);
-                        const DURATION: Duration = Duration::from_millis(100);
-                        let mut interval = Delay::new(DURATION);
-                        nursery
-                            .clone()
-                            .nurse({
-                                let sent = sent.clone();
-                                let sink = sink.clone();
-                                async move {
-                                    loop {
-                                        Pin::new(&mut interval).await;
-                                        interval.reset(DURATION);
-                                        if sent.load(AtomicOrdering::Acquire) == 0 {
-                                            sent.fetch_add(1, AtomicOrdering::AcqRel);
-                                            sink(Message::Data(10));
-                                            continue;
-                                        }
-                                        if sent.load(AtomicOrdering::Acquire) == 1 {
-                                            sent.fetch_add(1, AtomicOrdering::AcqRel);
-                                            sink(Message::Data(20));
-                                            continue;
-                                        }
-                                        if sent.load(AtomicOrdering::Acquire) == 2 {
-                                            sent.fetch_add(1, AtomicOrdering::AcqRel);
-                                            sink(Message::Data(30));
-                                            continue;
-                                        }
-                                        if sent.load(AtomicOrdering::Acquire) == 3 {
-                                            sink(Message::Terminate);
-                                            break;
+            let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
+            let source = Arc::new(
+                {
+                    let source_ref = Arc::clone(&source_ref);
+                    move |message| {
+                        println!("up: {:?}", message);
+                        {
+                            let upwards_expected = &mut *upwards_expected.write().unwrap();
+                            let e = upwards_expected.pop_front().unwrap();
+                            assert!(e.0(&message), "upwards type is expected: {}", e.1);
+                        }
+                        if let Message::Handshake(sink) = message {
+                            const DURATION: Duration = Duration::from_millis(100);
+                            let mut interval = Delay::new(DURATION);
+                            nursery
+                                .clone()
+                                .nurse({
+                                    let sent = Arc::clone(&sent);
+                                    let sink = Arc::clone(&sink);
+                                    async move {
+                                        loop {
+                                            Pin::new(&mut interval).await;
+                                            interval.reset(DURATION);
+                                            if sent.load(AtomicOrdering::Acquire) == 0 {
+                                                sent.fetch_add(1, AtomicOrdering::AcqRel);
+                                                sink(Message::Data(10));
+                                                continue;
+                                            }
+                                            if sent.load(AtomicOrdering::Acquire) == 1 {
+                                                sent.fetch_add(1, AtomicOrdering::AcqRel);
+                                                sink(Message::Data(20));
+                                                continue;
+                                            }
+                                            if sent.load(AtomicOrdering::Acquire) == 2 {
+                                                sent.fetch_add(1, AtomicOrdering::AcqRel);
+                                                sink(Message::Data(30));
+                                                continue;
+                                            }
+                                            if sent.load(AtomicOrdering::Acquire) == 3 {
+                                                sink(Message::Terminate);
+                                                break;
+                                            }
                                         }
                                     }
-                                }
-                            })
-                            .unwrap();
-                        let source = {
-                            let source_ref = &mut *source_ref.write().unwrap();
-                            source_ref.take().unwrap()
-                        };
-                        sink(Message::Handshake(source.into()));
+                                })
+                                .unwrap();
+                            let source = {
+                                let source_ref = &mut *source_ref.write().unwrap();
+                                source_ref.take().unwrap()
+                            };
+                            sink(Message::Handshake(source));
+                        }
                     }
                 }
-            };
+                .into(),
+            );
             {
                 let mut source_ref = source_ref.write().unwrap();
-                *source_ref = Some(Box::new(source.clone()));
+                *source_ref = Some(Arc::clone(&source));
             }
             source
         }
@@ -216,10 +224,11 @@ async fn it_observes_an_async_finite_listenable_source() {
 
     let source = make_source();
     for_each(move |x| {
+        println!("down: {}", x);
         let downwards_expected = &mut *downwards_expected.write().unwrap();
         let e = downwards_expected.pop_front().unwrap();
         assert_eq!(x, e, "downwards data is expected: {}", e);
-    })(source.into());
+    })(source);
 
     drop(nursery);
     async_std::future::timeout(Duration::from_millis(700), nursery_out)

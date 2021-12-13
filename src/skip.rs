@@ -11,20 +11,23 @@ use crate::{Message, Source};
 /// Works on either pullable and listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-skip/blob/698d6b7805c9bcddac038ceff25a0f0362adb25a/index.js#L1-L18>
-pub fn skip<T: 'static>(max: usize) -> Box<dyn Fn(Source<T>) -> Source<T>> {
+pub fn skip<T: 'static, S>(max: usize) -> Box<dyn Fn(S) -> Source<T>>
+where
+    S: Into<Arc<Source<T>>>,
+{
     Box::new(move |source| {
+        let source: Arc<Source<T>> = source.into();
         (move |message| {
             if let Message::Handshake(sink) = message {
-                let sink = Arc::new(sink);
                 let skipped = Arc::new(AtomicUsize::new(0));
                 let talkback: Arc<ArcSwapOption<Source<T>>> = Arc::new(ArcSwapOption::from(None));
-                source(Message::Handshake(
+                source(Message::Handshake(Arc::new(
                     (move |message| match message {
                         Message::Handshake(source) => {
-                            talkback.store(Some(Arc::new(source)));
-                            sink(Message::Handshake(
+                            talkback.store(Some(source));
+                            sink(Message::Handshake(Arc::new(
                                 ({
-                                    let talkback = talkback.clone();
+                                    let talkback = Arc::clone(&talkback);
                                     move |message| match message {
                                         Message::Handshake(_) => {
                                             panic!("sink handshake has already occurred");
@@ -50,7 +53,7 @@ pub fn skip<T: 'static>(max: usize) -> Box<dyn Fn(Source<T>) -> Source<T>> {
                                     }
                                 })
                                 .into(),
-                            ));
+                            )));
                         }
                         Message::Data(data) => {
                             if skipped.load(AtomicOrdering::Acquire) < max {
@@ -75,7 +78,7 @@ pub fn skip<T: 'static>(max: usize) -> Box<dyn Fn(Source<T>) -> Source<T>> {
                         }
                     })
                     .into(),
-                ))
+                )))
             }
         })
         .into()

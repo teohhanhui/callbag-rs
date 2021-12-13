@@ -9,18 +9,20 @@ use crate::{Message, Source};
 /// source, it will observe its data.
 ///
 /// See <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/readme.js#L40-L47>
-pub fn for_each<T: 'static, F: 'static>(f: F) -> Box<dyn Fn(Source<T>)>
+pub fn for_each<T: 'static, F: 'static, S>(f: F) -> Box<dyn Fn(S)>
 where
     F: Fn(T) + Send + Sync + Clone,
+    S: Into<Arc<Source<T>>>,
 {
     Box::new(move |source| {
+        let source: Arc<Source<T>> = source.into();
         let talkback = ArcSwapOption::from(None);
-        source(Message::Handshake(
-            ({
+        source(Message::Handshake(Arc::new(
+            {
                 let f = f.clone();
                 move |message| match message {
                     Message::Handshake(source) => {
-                        talkback.store(Some(Arc::new(source)));
+                        talkback.store(Some(source));
                         let talkback = talkback.load();
                         let talkback = talkback.as_ref().unwrap();
                         talkback(Message::Pull);
@@ -37,8 +39,8 @@ where
                     Message::Error(_) => {}
                     Message::Terminate => {}
                 }
-            })
+            }
             .into(),
-        ));
+        )));
     })
 }

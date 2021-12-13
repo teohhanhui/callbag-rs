@@ -22,18 +22,17 @@ where
     (move |message| {
         if let Message::Handshake(sink) = message {
             let iter = Arc::new(RwLock::new(iter.clone().into_iter()));
-            let sink = Arc::new(sink);
             let in_loop = Arc::new(AtomicBool::new(false));
             let got_pull = Arc::new(AtomicBool::new(false));
             let completed = Arc::new(AtomicBool::new(false));
             let res = Arc::new(RwLock::new(None));
             let res_done = Arc::new(AtomicBool::new(false));
             let r#loop = {
-                let sink = sink.clone();
-                let in_loop = in_loop.clone();
-                let got_pull = got_pull.clone();
-                let completed = completed.clone();
-                let res_done = res_done.clone();
+                let sink = Arc::clone(&sink);
+                let in_loop = Arc::clone(&in_loop);
+                let got_pull = Arc::clone(&got_pull);
+                let completed = Arc::clone(&completed);
+                let res_done = Arc::clone(&res_done);
                 move || {
                     in_loop.store(true, AtomicOrdering::Release);
                     while got_pull.load(AtomicOrdering::Acquire)
@@ -60,7 +59,7 @@ where
                     in_loop.store(false, AtomicOrdering::Release);
                 }
             };
-            sink(Message::Handshake(
+            sink(Message::Handshake(Arc::new(
                 (move |message| {
                     if completed.load(AtomicOrdering::Acquire) {
                         return;
@@ -87,7 +86,7 @@ where
                     }
                 })
                 .into(),
-            ));
+            )));
         }
     })
     .into()

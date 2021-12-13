@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{Message, Source};
 
 /// Callbag operator that applies a transformation on data passing through it.
@@ -5,21 +7,23 @@ use crate::{Message, Source};
 /// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/readme.js#L24-L29>
-pub fn map<I: 'static, O: 'static, F: 'static>(f: F) -> Box<dyn Fn(Source<I>) -> Source<O>>
+pub fn map<I: 'static, O: 'static, F: 'static, S>(f: F) -> Box<dyn Fn(S) -> Source<O>>
 where
     F: Fn(I) -> O + Send + Sync + Clone,
+    S: Into<Arc<Source<I>>>,
 {
     Box::new(move |source| {
-        ({
+        let source: Arc<Source<I>> = source.into();
+        {
             let f = f.clone();
             move |message| {
                 if let Message::Handshake(sink) = message {
-                    source(Message::Handshake(
-                        ({
+                    source(Message::Handshake(Arc::new(
+                        {
                             let f = f.clone();
                             move |message| match message {
                                 Message::Handshake(source) => {
-                                    sink(Message::Handshake(
+                                    sink(Message::Handshake(Arc::new(
                                         (move |message| match message {
                                             Message::Handshake(_) => {
                                                 panic!("sink handshake has already occurred");
@@ -38,7 +42,7 @@ where
                                             }
                                         })
                                         .into(),
-                                    ));
+                                    )));
                                 }
                                 Message::Data(data) => {
                                     sink(Message::Data(f(data)));
@@ -53,12 +57,12 @@ where
                                     sink(Message::Terminate);
                                 }
                             }
-                        })
+                        }
                         .into(),
-                    ));
+                    )));
                 }
             }
-        })
+        }
         .into()
     })
 }

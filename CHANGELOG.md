@@ -5,6 +5,17 @@
 ### Added
 
 -   Implement `pipe`
+-   Implement `merge` operator
+
+##  Changed
+
+-   Change `Debug::fmt` output of `Callbag` type
+-   Implement `Clone` for `Message` type
+
+### Breaking changes
+
+-   Change `Message::Error(_)` variant
+-   Change `Message::Handshake(_)` variant
 
 ##  v0.8.0 - 2021-12-07
 

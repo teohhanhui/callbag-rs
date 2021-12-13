@@ -8,25 +8,27 @@ use crate::{Message, Source};
 /// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-filter/blob/01212b2d17622cae31545200235e9db3f1b0e235/readme.js#L23-L36>
-pub fn filter<I: 'static, F: 'static>(condition: F) -> Box<dyn Fn(Source<I>) -> Source<I>>
+pub fn filter<I: 'static, F: 'static, S>(condition: F) -> Box<dyn Fn(S) -> Source<I>>
 where
     F: Fn(&I) -> bool + Send + Sync + Clone,
+    S: Into<Arc<Source<I>>>,
 {
     Box::new(move |source| {
-        ({
+        let source: Arc<Source<I>> = source.into();
+        {
             let condition = condition.clone();
             move |message| {
                 if let Message::Handshake(sink) = message {
                     let talkback = Arc::new(ArcSwapOption::from(None));
-                    source(Message::Handshake(
-                        ({
+                    source(Message::Handshake(Arc::new(
+                        {
                             let condition = condition.clone();
                             move |message| {
-                                let talkback = talkback.clone();
+                                let talkback = Arc::clone(&talkback);
                                 match message {
                                     Message::Handshake(source) => {
-                                        talkback.store(Some(Arc::new(source)));
-                                        sink(Message::Handshake(
+                                        talkback.store(Some(source));
+                                        sink(Message::Handshake(Arc::new(
                                             (move |message| match message {
                                                 Message::Handshake(_) => {
                                                     panic!("sink handshake has already occurred");
@@ -51,7 +53,7 @@ where
                                                 }
                                             })
                                             .into(),
-                                        ));
+                                        )));
                                     }
                                     Message::Data(data) => {
                                         if condition(&data) {
@@ -73,12 +75,12 @@ where
                                     }
                                 }
                             }
-                        })
+                        }
                         .into(),
-                    ));
+                    )));
                 }
             }
-        })
+        }
         .into()
     })
 }

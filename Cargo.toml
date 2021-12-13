@@ -27,3 +27,9 @@ wasm-bindgen-test = "0.3.28"
 
 [features]
 browser = []
+
+[profile.dev]
+incremental = false # https://github.com/rust-lang/rust/issues/91807
+
+[profile.test]
+incremental = false # https://github.com/rust-lang/rust/issues/91807
