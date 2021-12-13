@@ -2,12 +2,14 @@
 
 ##  Unreleased
 
+##  v0.9.0 - 2021-12-14
+
 ### Added
 
 -   Implement `pipe`
 -   Implement `merge` operator
 
-##  Changed
+###  Changed
 
 -   Change `Debug::fmt` output of `Callbag` type
 -   Implement `Clone` for `Message` type
