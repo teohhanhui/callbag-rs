@@ -13,6 +13,7 @@ pub use crate::from_iter::from_iter;
 pub use crate::map::map;
 pub use crate::merge::merge;
 pub use crate::scan::scan;
+pub use crate::share::share;
 pub use crate::skip::skip;
 pub use crate::take::take;
 
@@ -24,6 +25,7 @@ mod map;
 mod merge;
 mod pipe;
 mod scan;
+mod share;
 mod skip;
 mod take;
 

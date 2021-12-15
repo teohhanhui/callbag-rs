@@ -15,7 +15,7 @@ use crate::{Message, Source};
 #[macro_export]
 macro_rules! merge {
     ($($s:expr),* $(,)?) => {
-        $crate::merge(vec![$($s),*])
+        $crate::merge(vec![$($s),*].into_boxed_slice())
     };
 }
 
@@ -25,11 +25,11 @@ macro_rules! merge {
 /// designed for listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/readme.js#L29-L60>
-pub fn merge<T: 'static, S: 'static>(sources: Vec<S>) -> Source<T>
+pub fn merge<T: 'static, S: 'static>(sources: Box<[S]>) -> Source<T>
 where
     S: Into<Arc<Source<T>>> + Send + Sync,
 {
-    let sources: Box<[Arc<Source<T>>]> = sources.into_iter().map(|s| s.into()).collect();
+    let sources: Box<[Arc<Source<T>>]> = Vec::from(sources).into_iter().map(|s| s.into()).collect();
     (move |message| {
         if let Message::Handshake(sink) = message {
             let n = sources.len();
@@ -42,7 +42,7 @@ where
             let end_count = Arc::new(AtomicUsize::new(0));
             let ended = Arc::new(AtomicBool::new(false));
             let talkback: Arc<Source<T>> = Arc::new(
-                ({
+                {
                     let source_talkbacks = Arc::clone(&source_talkbacks);
                     let ended = Arc::clone(&ended);
                     move |message| {
@@ -71,7 +71,7 @@ where
                             }
                         }
                     }
-                })
+                }
                 .into(),
             );
             for i in 0..n {
@@ -79,7 +79,7 @@ where
                     return;
                 }
                 sources[i](Message::Handshake(Arc::new(
-                    ({
+                    {
                         let sink = Arc::clone(&sink);
                         let source_talkbacks = Arc::clone(&source_talkbacks);
                         let start_count = Arc::clone(&start_count);
@@ -121,7 +121,7 @@ where
                                 }
                             }
                         }
-                    })
+                    }
                     .into(),
                 )));
             }

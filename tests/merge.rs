@@ -1,4 +1,5 @@
 use arc_swap::ArcSwapOption;
+use assert_matches::assert_matches;
 use never::Never;
 use std::{
     collections::VecDeque,
@@ -1158,15 +1159,15 @@ fn all_sources_get_requests_from_sinks() {
             if let Message::Handshake(_) = message {
             } else {
                 let history = &mut *history.write().unwrap();
-                history.push((name, dir, format!("{:?}", message)));
+                history.push((name, dir, message));
             }
         }
     };
 
-    let (source_1, _) = make_mock_callbag("source_1".to_owned(), report.clone(), true);
-    let (source_2, _) = make_mock_callbag("source_2".to_owned(), report.clone(), true);
-    let (source_3, _) = make_mock_callbag("source_3".to_owned(), report, true);
-    let (sink, sink_emit) = make_mock_callbag("sink".to_owned(), |_, _, _| {}, false);
+    let (source_1, _) = make_mock_callbag("source_1", report.clone(), true);
+    let (source_2, _) = make_mock_callbag("source_2", report.clone(), true);
+    let (source_3, _) = make_mock_callbag("source_3", report, true);
+    let (sink, sink_emit) = make_mock_callbag("sink", |_, _, _| {}, false);
     let sink = Arc::new(sink);
 
     merge!(source_1, source_2, source_3)(Message::Handshake(sink));
@@ -1174,57 +1175,15 @@ fn all_sources_get_requests_from_sinks() {
     sink_emit(Message::Pull);
     sink_emit(Message::Terminate);
 
-    assert_eq!(
+    assert_matches!(
         (&*history.read().unwrap())[..],
         [
-            (
-                "source_1".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Pull;
-                    message
-                })
-            ),
-            (
-                "source_2".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Pull;
-                    message
-                })
-            ),
-            (
-                "source_3".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Pull;
-                    message
-                })
-            ),
-            (
-                "source_1".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Terminate;
-                    message
-                })
-            ),
-            (
-                "source_2".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Terminate;
-                    message
-                })
-            ),
-            (
-                "source_3".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Terminate;
-                    message
-                })
-            ),
+            ("source_1", MessageDirection::FromDown, Message::Pull),
+            ("source_2", MessageDirection::FromDown, Message::Pull),
+            ("source_3", MessageDirection::FromDown, Message::Pull),
+            ("source_1", MessageDirection::FromDown, Message::Terminate),
+            ("source_2", MessageDirection::FromDown, Message::Terminate),
+            ("source_3", MessageDirection::FromDown, Message::Terminate),
         ],
         "sources all get requests from sink"
     );
@@ -1244,15 +1203,15 @@ fn all_sources_get_subscription_errors_from_sink() {
             if let Message::Handshake(_) = message {
             } else {
                 let history = &mut *history.write().unwrap();
-                history.push((name, dir, format!("{:?}", message)));
+                history.push((name, dir, message));
             }
         }
     };
 
-    let (source_1, _) = make_mock_callbag("source_1".to_owned(), report.clone(), true);
-    let (source_2, _) = make_mock_callbag("source_2".to_owned(), report.clone(), true);
-    let (source_3, _) = make_mock_callbag("source_3".to_owned(), report, true);
-    let (sink, sink_emit) = make_mock_callbag("sink".to_owned(), |_, _, _| {}, false);
+    let (source_1, _) = make_mock_callbag("source_1", report.clone(), true);
+    let (source_2, _) = make_mock_callbag("source_2", report.clone(), true);
+    let (source_3, _) = make_mock_callbag("source_3", report, true);
+    let (sink, sink_emit) = make_mock_callbag("sink", |_, _, _| {}, false);
     let sink = Arc::new(sink);
 
     merge!(source_1, source_2, source_3)(Message::Handshake(sink));
@@ -1262,42 +1221,13 @@ fn all_sources_get_subscription_errors_from_sink() {
         err.into()
     }));
 
-    assert_eq!(
+    // no way to match "err" inside Message::Error(_)
+    assert_matches!(
         (&*history.read().unwrap())[..],
         [
-            (
-                "source_1".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Error({
-                        let err: Box<dyn Error + Send + Sync + 'static> = "err".into();
-                        err.into()
-                    });
-                    message
-                })
-            ),
-            (
-                "source_2".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Error({
-                        let err: Box<dyn Error + Send + Sync + 'static> = "err".into();
-                        err.into()
-                    });
-                    message
-                })
-            ),
-            (
-                "source_3".to_owned(),
-                MessageDirection::FromDown,
-                format!("{:?}", {
-                    let message: Message<Never, Never> = Message::Error({
-                        let err: Box<dyn Error + Send + Sync + 'static> = "err".into();
-                        err.into()
-                    });
-                    message
-                })
-            ),
+            ("source_1", MessageDirection::FromDown, Message::Error(_)),
+            ("source_2", MessageDirection::FromDown, Message::Error(_)),
+            ("source_3", MessageDirection::FromDown, Message::Error(_)),
         ],
         "all sources get errors from sink"
     );

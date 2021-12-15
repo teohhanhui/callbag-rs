@@ -270,11 +270,9 @@ async fn it_scans_an_async_finite_listenable_source() {
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
             if let Message::Data(data) = message {
-                {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {}", e);
-                }
+                let downwards_expected = &mut *downwards_expected.write().unwrap();
+                let e = downwards_expected.pop_front().unwrap();
+                assert_eq!(data, e, "downwards data is expected: {}", e);
             }
         })
         .into(),

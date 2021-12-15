@@ -193,11 +193,9 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
             if let Message::Data(data) = message {
-                {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {}", e);
-                }
+                let downwards_expected = &mut *downwards_expected.write().unwrap();
+                let e = downwards_expected.pop_front().unwrap();
+                assert_eq!(data, e, "downwards data is expected: {}", e);
             }
         })
         .into(),
@@ -590,11 +588,9 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
             if let Message::Data(data) = message {
-                {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {}", e);
-                }
+                let downwards_expected = &mut *downwards_expected.write().unwrap();
+                let e = downwards_expected.pop_front().unwrap();
+                assert_eq!(data, e, "downwards data is expected: {}", e);
             }
         })
         .into(),
@@ -765,11 +761,9 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
             if let Message::Data(data) = message {
-                {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {}", e);
-                }
+                let downwards_expected = &mut *downwards_expected.write().unwrap();
+                let e = downwards_expected.pop_front().unwrap();
+                assert_eq!(data, e, "downwards data is expected: {}", e);
             }
         })
         .into(),

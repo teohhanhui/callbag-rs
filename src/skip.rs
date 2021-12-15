@@ -26,7 +26,7 @@ where
                         Message::Handshake(source) => {
                             talkback.store(Some(source));
                             sink(Message::Handshake(Arc::new(
-                                ({
+                                {
                                     let talkback = Arc::clone(&talkback);
                                     move |message| match message {
                                         Message::Handshake(_) => {
@@ -51,7 +51,7 @@ where
                                             source(Message::Terminate);
                                         }
                                     }
-                                })
+                                }
                                 .into(),
                             )));
                         }

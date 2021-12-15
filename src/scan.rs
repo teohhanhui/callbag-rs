@@ -22,14 +22,14 @@ where
 {
     Box::new(move |source| {
         let source: Arc<Source<I>> = source.into();
-        ({
+        {
             let reducer = reducer.clone();
             let seed = seed.clone();
             move |message| {
                 if let Message::Handshake(sink) = message {
                     let acc = ArcSwap::from_pointee(seed.clone());
                     source(Message::Handshake(Arc::new(
-                        ({
+                        {
                             let reducer = reducer.clone();
                             move |message| match message {
                                 Message::Handshake(source) => {
@@ -68,12 +68,12 @@ where
                                     sink(Message::Terminate);
                                 }
                             }
-                        })
+                        }
                         .into(),
                     )));
                 }
             }
-        })
+        }
         .into()
     })
 }

@@ -5,12 +5,15 @@ use crate::{Message, Source};
 
 /// Callbag operator that flattens a higher-order callbag source.
 ///
-/// Like RxJS "switch" or xstream "flatten". Use it with map to get behavior equivalent to
+/// Like RxJS "switch" or xstream "flatten". Use it with [`map`] to get behavior equivalent to
 /// "switchMap".
 ///
 /// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/index.js#L1-L43>
+///
+///
+/// [`map`]: crate::map()
 pub fn flatten<T: 'static, S, R: 'static>(source: S) -> Source<T>
 where
     S: Into<Arc<Source<R>>>,
@@ -22,7 +25,7 @@ where
             let outer_talkback: Arc<ArcSwapOption<Source<R>>> = Arc::new(ArcSwapOption::from(None));
             let inner_talkback: Arc<ArcSwapOption<Source<T>>> = Arc::new(ArcSwapOption::from(None));
             let talkback: Arc<Source<T>> = Arc::new(
-                ({
+                {
                     let outer_talkback = Arc::clone(&outer_talkback);
                     let inner_talkback = Arc::clone(&inner_talkback);
                     move |message| match message {
@@ -48,7 +51,7 @@ where
                             }
                         }
                     }
-                })
+                }
                 .into(),
             );
             source(Message::Handshake(Arc::new(

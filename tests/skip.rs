@@ -90,7 +90,7 @@ async fn it_skips_from_a_pullable_source() {
                         }
 
                         if let Message::Handshake(sink) = message {
-                            sink_ref.store(Some(Arc::new(sink)));
+                            sink_ref.store(Some(sink));
                             let sink_ref = sink_ref.load();
                             let sink_ref = sink_ref.as_ref().unwrap();
                             let source = {

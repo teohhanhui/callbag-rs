@@ -66,7 +66,7 @@ fn it_filters_a_pullable_source() {
         let sent = Arc::new(AtomicUsize::new(0));
         let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source = Arc::new(
-            ({
+            {
                 let source_ref = Arc::clone(&source_ref);
                 move |message| {
                     println!("up: {:?}", message);
@@ -118,7 +118,7 @@ fn it_filters_a_pullable_source() {
                         sink_ref(Message::Data(3));
                     }
                 }
-            })
+            }
             .into(),
         );
         {
@@ -199,7 +199,7 @@ async fn it_filters_an_async_finite_listenable_source() {
             let sent = Arc::new(AtomicUsize::new(0));
             let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
             let source = Arc::new(
-                ({
+                {
                     let source_ref = Arc::clone(&source_ref);
                     move |message| {
                         println!("up: {:?}", message);
@@ -250,7 +250,7 @@ async fn it_filters_an_async_finite_listenable_source() {
                             sink(Message::Handshake(source));
                         }
                     }
-                })
+                }
                 .into(),
             );
             {
@@ -270,11 +270,9 @@ async fn it_filters_an_async_finite_listenable_source() {
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
             if let Message::Data(data) = message {
-                {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {}", e);
-                }
+                let downwards_expected = &mut *downwards_expected.write().unwrap();
+                let e = downwards_expected.pop_front().unwrap();
+                assert_eq!(data, e, "downwards data is expected: {}", e);
             }
         })
         .into(),
@@ -327,7 +325,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
             let interval_cleared = Arc::new(AtomicBool::new(false));
             let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
             let source = Arc::new(
-                ({
+                {
                     let source_ref = Arc::clone(&source_ref);
                     move |message| {
                         println!("up: {:?}", message);
@@ -368,7 +366,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                             interval_cleared.store(true, AtomicOrdering::Release);
                         }
                     }
-                })
+                }
                 .into(),
             );
             {

@@ -24,7 +24,7 @@ where
                     Arc::new(ArcSwapOption::from(None));
                 let end = Arc::new(AtomicBool::new(false));
                 let talkback: Arc<Source<T>> = Arc::new(
-                    ({
+                    {
                         let taken = Arc::clone(&taken);
                         let end = Arc::clone(&end);
                         let source_talkback = Arc::clone(&source_talkback);
@@ -55,7 +55,7 @@ where
                                 source_talkback(Message::Terminate);
                             }
                         }
-                    })
+                    }
                     .into(),
                 );
                 source(Message::Handshake(Arc::new(

@@ -6,7 +6,7 @@ use callbag::{Callbag, Message};
 
 pub type MessagePredicate<I, O> = fn(&Message<I, O>) -> bool;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum MessageDirection {
     FromUp,
     FromDown,
@@ -24,21 +24,21 @@ pub fn never(message: Message<Never, Never>) {
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L540-L555>
 pub fn make_mock_callbag<I: 'static, O: 'static, R: 'static>(
-    name: String,
+    name: &'static str,
     report: R,
     is_source: bool,
 ) -> (Callbag<I, O>, impl Fn(Message<O, I>))
 where
     I: Clone,
     O: Clone,
-    R: Fn(String, MessageDirection, Message<I, O>) + Send + Sync,
+    R: Fn(&'static str, MessageDirection, Message<I, O>) + Send + Sync,
 {
     let report = Arc::new(report);
     let talkback_ref = Arc::new(ArcSwapOption::from(None));
     let mock = {
         let talkback_ref = Arc::clone(&talkback_ref);
         move |message: Message<I, O>| {
-            report(name.clone(), MessageDirection::FromUp, message.clone());
+            report(name, MessageDirection::FromUp, message.clone());
             if let Message::Handshake(talkback) = message {
                 talkback_ref.store(Some(Arc::clone(&talkback)));
                 if is_source {
@@ -46,10 +46,9 @@ where
                     let talkback = talkback_ref.as_ref().unwrap();
                     talkback(Message::Handshake(Arc::new(
                         {
-                            let name = name.clone();
                             let report = report.clone();
                             move |message| {
-                                report(name.clone(), MessageDirection::FromDown, message);
+                                report(name, MessageDirection::FromDown, message);
                             }
                         }
                         .into(),
