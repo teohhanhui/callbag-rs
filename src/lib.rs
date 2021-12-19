@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+pub use crate::combine::combine;
 pub use crate::filter::filter;
 pub use crate::flatten::flatten;
 pub use crate::for_each::for_each;
@@ -17,6 +18,7 @@ pub use crate::share::share;
 pub use crate::skip::skip;
 pub use crate::take::take;
 
+mod combine;
 mod filter;
 mod flatten;
 mod for_each;
