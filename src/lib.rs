@@ -7,6 +7,7 @@ use std::{
 };
 
 pub use crate::combine::combine;
+pub use crate::concat::concat;
 pub use crate::filter::filter;
 pub use crate::flatten::flatten;
 pub use crate::for_each::for_each;
@@ -19,6 +20,7 @@ pub use crate::skip::skip;
 pub use crate::take::take;
 
 mod combine;
+mod concat;
 mod filter;
 mod flatten;
 mod for_each;

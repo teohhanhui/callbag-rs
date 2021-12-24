@@ -2,6 +2,10 @@
 
 ##  Unreleased
 
+### Added
+
+- Implement `concat` operator
+
 ##  v0.11.0 - 2021-12-24
 
 ### Added

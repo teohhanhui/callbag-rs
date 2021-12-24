@@ -230,7 +230,7 @@ async fn it_merges_two_async_finite_listenable_sources() {
                                     nursery
                                         .clone()
                                         .nurse({
-                                            let sink = sink.clone();
+                                            let sink = Arc::clone(&sink);
                                             async move {
                                                 timeout.await;
                                                 sink(Message::Terminate);
@@ -335,8 +335,8 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                             nursery
                                 .clone()
                                 .nurse({
-                                    let sent = sent.clone();
-                                    let sink = sink.clone();
+                                    let sent = Arc::clone(&sent);
+                                    let sink = Arc::clone(&sink);
                                     async move {
                                         loop {
                                             Pin::new(&mut interval).await;
