@@ -2,6 +2,8 @@
 
 ##  Unreleased
 
+##  v0.11.0 - 2021-12-24
+
 ### Added
 
 - Implement `combine` operator
