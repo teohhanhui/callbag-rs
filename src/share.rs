@@ -9,11 +9,15 @@ use crate::{Message, Source};
 
 /// Callbag operator that broadcasts a single source to multiple sinks.
 ///
-/// Does reference counting on sinks and starts the source when the first sink gets connected, similar to RxJS `.share()`.
+/// Does reference counting on sinks and starts the source when the first sink gets connected,
+/// similar to [RxJS `.share()`][RxJS `share`].
 ///
 /// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-share/blob/d96748edec631800ec5e606018f519ccaeb8f766/index.js#L1-L32>
+///
+///
+/// [RxJS `share`]: https://rxjs.dev/api/operators/share
 pub fn share<T: 'static, S>(source: S) -> Source<T>
 where
     T: Clone,

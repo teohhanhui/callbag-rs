@@ -629,7 +629,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     ),
     wasm_bindgen_test
 )]
-async fn it_propagates_source_error_to_sink_and_does_not_subscribe_to_next_source() {
+async fn it_propagates_source_error_to_sink_and_doesnt_subscribe_to_next_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let downwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),

@@ -5,7 +5,7 @@ use crate::{Message, Source};
 
 /// Callbag operator that combines consecutive values from the same source.
 ///
-/// It's essentially like array `.reduce`, but delivers a new accumulated value for each value from
+/// It's essentially like [`Iterator::scan`], delivering a new accumulated value for each value from
 /// the callbag source.
 ///
 /// Works on either pullable or listenable sources.
