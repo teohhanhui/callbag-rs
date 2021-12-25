@@ -47,6 +47,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 )]
 async fn it_concats_1_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -145,6 +146,7 @@ async fn it_concats_1_async_finite_listenable_source() {
 )]
 async fn it_concats_2_async_finite_listenable_sources() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -505,6 +507,7 @@ fn it_concats_2_sync_finite_pullable_sources() {
 )]
 async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
@@ -631,6 +634,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
 )]
 async fn it_propagates_source_error_to_sink_and_doesnt_subscribe_to_next_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),

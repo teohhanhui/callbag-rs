@@ -11,8 +11,10 @@ categories = ["asynchronous", "concurrency"]
 
 [dependencies]
 arc-swap = "1.5.0"
+async_nursery = { version = "0.3.1", optional = true }
+futures-timer = { version = "3.0.2", optional = true }
 never = "0.1.0"
-paste = "1.0.6"
+paste = { version = "1.0.6", optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
@@ -28,7 +30,93 @@ futures-timer = { version = "3.0.2", features = ["wasm-bindgen"] }
 wasm-bindgen-test = "0.3.28"
 
 [features]
+default = [
+    "combine",
+    "concat",
+    "filter",
+    "flatten",
+    "for_each",
+    "from_iter",
+    "interval",
+    "map",
+    "merge",
+    "pipe",
+    "scan",
+    "share",
+    "skip",
+    "take",
+]
 browser = []
+combine = ["paste"]
+concat = []
+filter = []
+flatten = []
+for_each = []
+from_iter = []
+interval = ["async_nursery", "futures-timer"]
+map = []
+merge = []
+pipe = []
+scan = []
+share = []
+skip = []
+take = []
+
+[[test]]
+name = "combine"
+required-features = ["combine"]
+
+[[test]]
+name = "concat"
+required-features = ["concat"]
+
+[[test]]
+name = "filter"
+required-features = ["filter"]
+
+[[test]]
+name = "flatten"
+required-features = ["flatten"]
+
+[[test]]
+name = "for_each"
+required-features = ["for_each"]
+
+[[test]]
+name = "from_iter"
+required-features = ["from_iter"]
+
+[[test]]
+name = "interval"
+required-features = ["interval"]
+
+[[test]]
+name = "map"
+required-features = ["map"]
+
+[[test]]
+name = "merge"
+required-features = ["merge"]
+
+[[test]]
+name = "pipe"
+required-features = ["pipe"]
+
+[[test]]
+name = "scan"
+required-features = ["scan"]
+
+[[test]]
+name = "share"
+required-features = ["share"]
+
+[[test]]
+name = "skip"
+required-features = ["skip"]
+
+[[test]]
+name = "take"
+required-features = ["take"]
 
 [profile.dev]
 incremental = false # https://github.com/rust-lang/rust/issues/91807

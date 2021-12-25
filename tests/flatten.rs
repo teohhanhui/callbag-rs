@@ -54,6 +54,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 )]
 async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -434,6 +435,7 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
 )]
 async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let inner_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -619,6 +621,7 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
 )]
 async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
@@ -793,6 +796,7 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for_inner_completion()
 {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     #[allow(clippy::mutex_atomic)]
     let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> =
@@ -904,6 +908,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
 )]
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_errors() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     #[allow(clippy::mutex_atomic)]
     let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> =

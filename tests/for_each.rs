@@ -142,6 +142,7 @@ fn it_iterates_a_finite_pullable_source() {
 )]
 async fn it_observes_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Pull), "Message::Pull"),

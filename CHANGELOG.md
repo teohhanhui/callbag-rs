@@ -2,17 +2,25 @@
 
 ##  Unreleased
 
+### Added
+
+-   Implement `interval`
+
+### Changed
+
+-   Add a feature gate for each function
+
 ##  v0.12.0 - 2021-12-25
 
 ### Added
 
-- Implement `concat` operator
+-   Implement `concat` operator
 
 ##  v0.11.0 - 2021-12-24
 
 ### Added
 
-- Implement `combine` operator
+-   Implement `combine` operator
 
 ##  v0.10.0 - 2021-12-16
 

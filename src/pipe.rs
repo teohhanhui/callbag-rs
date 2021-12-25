@@ -7,7 +7,6 @@
 ///
 /// See <https://github.com/staltz/callbag-pipe/blob/a2e5b985ce7aa55de2749e1c3e08867f45edc6fa/readme.js#L110-L114>
 ///
-///
 /// [Lodash `flow`]: https://lodash.com/docs/#flow
 /// [Ramda `pipe`]: https://ramdajs.com/docs/#pipe
 #[macro_export]

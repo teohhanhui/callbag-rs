@@ -12,7 +12,6 @@ use crate::{Message, Source};
 ///
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/index.js#L1-L43>
 ///
-///
 /// [`map`]: crate::map()
 /// [ReactiveX `switch`]: https://reactivex.io/documentation/operators/switch.html
 /// [RxJS `switchMap`]: https://rxjs.dev/api/operators/switchMap

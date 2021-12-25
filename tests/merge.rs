@@ -49,6 +49,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 )]
 async fn it_merges_one_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -147,6 +148,7 @@ async fn it_merges_one_async_finite_listenable_source() {
 )]
 async fn it_merges_two_async_finite_listenable_sources() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -295,6 +297,7 @@ async fn it_merges_two_async_finite_listenable_sources() {
 )]
 async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
@@ -421,6 +424,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
 )]
 async fn it_errors_when_one_of_the_sources_errors() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let upwards_expected_a: Vec<(MessagePredicate<_, _>, &str)> =
         vec![(|m| matches!(m, Message::Handshake(_)), "Message::Handshake")];
     let upwards_expected_a: Arc<RwLock<VecDeque<_>>> =
@@ -614,6 +618,7 @@ async fn it_errors_when_one_of_the_sources_errors() {
 )]
 async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -747,6 +752,7 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
 )]
 async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_conditions_part_1() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -864,6 +870,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
 )]
 async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_conditions_part_2() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),

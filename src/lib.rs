@@ -6,31 +6,60 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "combine")]
 pub use crate::combine::combine;
+#[cfg(feature = "concat")]
 pub use crate::concat::concat;
+#[cfg(feature = "filter")]
 pub use crate::filter::filter;
+#[cfg(feature = "flatten")]
 pub use crate::flatten::flatten;
+#[cfg(feature = "for_each")]
 pub use crate::for_each::for_each;
+#[cfg(feature = "from_iter")]
 pub use crate::from_iter::from_iter;
+#[cfg(feature = "interval")]
+pub use crate::interval::interval;
+#[cfg(feature = "map")]
 pub use crate::map::map;
+#[cfg(feature = "merge")]
 pub use crate::merge::merge;
+#[cfg(feature = "scan")]
 pub use crate::scan::scan;
+#[cfg(feature = "share")]
 pub use crate::share::share;
+#[cfg(feature = "skip")]
 pub use crate::skip::skip;
+#[cfg(feature = "take")]
 pub use crate::take::take;
 
+#[cfg(feature = "combine")]
 mod combine;
+#[cfg(feature = "concat")]
 mod concat;
+#[cfg(feature = "filter")]
 mod filter;
+#[cfg(feature = "flatten")]
 mod flatten;
+#[cfg(feature = "for_each")]
 mod for_each;
+#[cfg(feature = "from_iter")]
 mod from_iter;
+#[cfg(feature = "interval")]
+mod interval;
+#[cfg(feature = "map")]
 mod map;
+#[cfg(feature = "merge")]
 mod merge;
+#[cfg(feature = "pipe")]
 mod pipe;
+#[cfg(feature = "scan")]
 mod scan;
+#[cfg(feature = "share")]
 mod share;
+#[cfg(feature = "skip")]
 mod skip;
+#[cfg(feature = "take")]
 mod take;
 
 /// A message passed to a [`Callbag`].
