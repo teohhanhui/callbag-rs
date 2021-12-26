@@ -1,0 +1,59 @@
+[package]
+name = "callbag"
+version = "0.12.0"
+authors = ["Teoh Han Hui <teohhanhui@gmail.com>"]
+edition = "2021"
+description = "An implementation of the callbag spec"
+repository = "https://github.com/teohhanhui/callbag-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["frp", "iterable", "observable", "reactive", "stream"]
+categories = ["asynchronous", "concurrency"]
+
+[dependencies]
+callbag-combine = { path = "../callbag-combine", version = "0.12.0", optional = true }
+callbag-concat = { path = "../callbag-concat", version = "0.12.0", optional = true }
+callbag-core = { path = "../callbag-core", version = "0.12.0" }
+callbag-filter = { path = "../callbag-filter", version = "0.12.0", optional = true }
+callbag-flatten = { path = "../callbag-flatten", version = "0.12.0", optional = true }
+callbag-for-each = { path = "../callbag-for-each", version = "0.12.0", optional = true }
+callbag-from-iter = { path = "../callbag-from-iter", version = "0.12.0", optional = true }
+callbag-interval = { path = "../callbag-interval", version = "0.12.0", optional = true }
+callbag-map = { path = "../callbag-map", version = "0.12.0", optional = true }
+callbag-merge = { path = "../callbag-merge", version = "0.12.0", optional = true }
+callbag-pipe = { path = "../callbag-pipe", version = "0.12.0", optional = true }
+callbag-scan = { path = "../callbag-scan", version = "0.12.0", optional = true }
+callbag-share = { path = "../callbag-share", version = "0.12.0", optional = true }
+callbag-skip = { path = "../callbag-skip", version = "0.12.0", optional = true }
+callbag-take = { path = "../callbag-take", version = "0.12.0", optional = true }
+
+[features]
+default = [
+    "combine",
+    "concat",
+    "filter",
+    "flatten",
+    "for_each",
+    "from_iter",
+    "interval",
+    "map",
+    "merge",
+    "pipe",
+    "scan",
+    "share",
+    "skip",
+    "take",
+]
+combine = ["callbag-combine"]
+concat = ["callbag-concat"]
+filter = ["callbag-filter"]
+flatten = ["callbag-flatten"]
+for_each = ["callbag-for-each"]
+from_iter = ["callbag-from-iter"]
+interval = ["callbag-interval"]
+map = ["callbag-map"]
+merge = ["callbag-merge"]
+pipe = ["callbag-pipe"]
+scan = ["callbag-scan"]
+share = ["callbag-share"]
+skip = ["callbag-skip"]
+take = ["callbag-take"]

@@ -1,0 +1,13 @@
+[package]
+name = "callbag-core"
+version = "0.12.0"
+authors = ["Teoh Han Hui <teohhanhui@gmail.com>"]
+edition = "2021"
+description = "An implementation of the callbag spec"
+repository = "https://github.com/teohhanhui/callbag-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["frp", "iterable", "observable", "reactive", "stream"]
+categories = ["asynchronous", "concurrency"]
+
+[dependencies]
+never = "0.1.0"

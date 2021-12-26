@@ -1,0 +1,19 @@
+[package]
+name = "callbag-pipe"
+version = "0.12.0"
+authors = ["Teoh Han Hui <teohhanhui@gmail.com>"]
+edition = "2021"
+description = "An implementation of the callbag spec"
+repository = "https://github.com/teohhanhui/callbag-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["frp", "iterable", "observable", "reactive", "stream"]
+categories = ["asynchronous", "concurrency"]
+
+[dev-dependencies]
+callbag-filter = { path = "../callbag-filter" }
+callbag-for-each = { path = "../callbag-for-each" }
+callbag-from-iter = { path = "../callbag-from-iter" }
+callbag-map = { path = "../callbag-map" }
+
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dev-dependencies]
+wasm-bindgen-test = "0.3.28"

@@ -1,0 +1,28 @@
+[package]
+name = "callbag-concat"
+version = "0.12.0"
+authors = ["Teoh Han Hui <teohhanhui@gmail.com>"]
+edition = "2021"
+description = "An implementation of the callbag spec"
+repository = "https://github.com/teohhanhui/callbag-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["frp", "iterable", "observable", "reactive", "stream"]
+categories = ["asynchronous", "concurrency"]
+
+[dependencies]
+arc-swap = "1.5.0"
+callbag-core = { path = "../callbag-core", version = "0.12.0" }
+
+[dev-dependencies]
+never = "0.1.0"
+test_utils = { path = "../test_utils" }
+
+[target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]
+async-std = { version = "1.10.0", features = ["attributes", "unstable"] }
+async_executors = { version = "0.4.2", features = ["async_std"] }
+async_nursery = "0.3.1"
+futures-timer = "3.0.2"
+
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dev-dependencies]
+futures-timer = { version = "3.0.2", features = ["wasm-bindgen"] }
+wasm-bindgen-test = "0.3.28"
