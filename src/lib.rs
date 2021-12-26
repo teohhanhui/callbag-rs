@@ -1,15 +1,170 @@
-use never::Never;
-use std::{
-    error::Error,
-    fmt::{self, Debug},
-    ops::Deref,
-    sync::Arc,
-};
+//! Basic [callbag][callbag-spec] factories and operators to get started with.
+//!
+//! **Highlights:**
+//!
+//! - Supports reactive stream programming
+//! - Supports iterable programming (also!)
+//! - Same operator works for both of the above
+//! - Extensible
+//!
+//! Imagine a hybrid between an [Observable][tc39-observable] and an
+//! [(Async)Iterable][tc39-async-iteration], that's what callbags are all about. It's all done with
+//! a few simple callbacks, following the [callbag spec][callbag-spec].
+//!
+//! # Examples
+//!
+//! ## Reactive programming examples
+//!
+//! Pick the first 5 odd numbers from a clock that ticks every second, then start observing them:
+//!
+//! ```
+//! use arc_swap::ArcSwap;
+//! use async_nursery::Nursery;
+//! use std::{sync::Arc, time::Duration};
+//!
+//! use callbag::{filter, for_each, interval, map, pipe, take};
+//!
+//! let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+//!
+//! let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+//!
+//! pipe!(
+//!     interval(Duration::from_millis(1_000), nursery.clone()),
+//!     map(|x| x + 1),
+//!     filter(|x| x % 2 == 1),
+//!     take(5),
+//!     for_each({
+//!         let vec = Arc::clone(&vec);
+//!         move |x| {
+//!             println!("{}", x);
+//!             vec.rcu(move |vec| {
+//!                 let mut vec = (**vec).clone();
+//!                 vec.push(x);
+//!                 vec
+//!             });
+//!         }
+//!     }),
+//! );
+//!
+//! drop(nursery);
+//! async_std::task::block_on(nursery_out);
+//!
+//! assert_eq!(vec.load()[..], [1, 3, 5, 7, 9]);
+//! ```
+//!
+//! ## Iterable programming examples
+//!
+//! From a range of numbers, pick 5 of them and divide them by 4, then start pulling those one by one:
+//!
+//! ```
+//! use arc_swap::ArcSwap;
+//! use std::sync::Arc;
+//!
+//! use callbag::{for_each, from_iter, map, pipe, take};
+//!
+//! #[derive(Clone)]
+//! struct Range {
+//!     i: usize,
+//!     to: usize,
+//! }
+//!
+//! impl Range {
+//!     fn new(from: usize, to: usize) -> Self {
+//!         Range { i: from, to }
+//!     }
+//! }
+//!
+//! impl Iterator for Range {
+//!     type Item = usize;
+//!
+//!     fn next(&mut self) -> Option<Self::Item> {
+//!         let i = self.i;
+//!         if i <= self.to {
+//!             self.i += 1;
+//!             Some(i)
+//!         } else {
+//!             None
+//!         }
+//!     }
+//! }
+//!
+//! let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+//!
+//! pipe!(
+//!     from_iter(Range::new(40, 99)), // 10, 10.25, 10.5, 10.75, 11
+//!     take(5), // 40, 41, 42, 43, 44
+//!     map(|x| x as f64 / 4.0), // 10, 10.25, 10.5, 10.75, 11
+//!     for_each({
+//!         let vec = Arc::clone(&vec);
+//!         move |x| {
+//!             println!("{}", x);
+//!             vec.rcu(move |vec| {
+//!                 let mut vec = (**vec).clone();
+//!                 vec.push(x);
+//!                 vec
+//!             });
+//!         }
+//!     }),
+//! );
+//!
+//! assert_eq!(vec.load()[..], [10.0, 10.25, 10.5, 10.75, 11.0]);
+//! ```
+//!
+//! # API
+//!
+//! The list below shows what's included.
+//!
+//! ## Source factories
+//!
+//! - [from_iter][crate::from_iter()]
+//! - [interval][crate::interval()]
+//!
+//! ## Sink factories
+//!
+//! - [for_each][crate::for_each()]
+//!
+//! ## Transformation operators
+//!
+//! - [map][crate::map()]
+//! - [scan][crate::scan()]
+//! - [flatten][crate::flatten()]
+//!
+//! ## Filtering operators
+//!
+//! - [take][crate::take()]
+//! - [skip][crate::skip()]
+//! - [filter][crate::filter()]
+//!
+//! ## Combination operators
+//!
+//! - [merge!][crate::merge!]
+//! - [concat!][crate::concat!]
+//! - [combine!][crate::combine!]
+//!
+//! ## Utilities
+//!
+//! - [share][crate::share()]
+//! - [pipe!][crate::pipe!]
+//!
+//! # Terminology
+//!
+//! - **source**: a callbag that delivers data
+//! - **sink**: a callbag that receives data
+//! - **puller sink**: a sink that actively requests data from the source
+//! - **pullable source**: a source that delivers data only on demand (on receiving a request)
+//! - **listener sink**: a sink that passively receives data from the source
+//! - **listenable source**: source which sends data to the sink without waiting for requests
+//! - **operator**: a callbag based on another callbag which applies some operation
+//!
+//! [callbag-spec]: https://github.com/callbag/callbag
+//! [tc39-async-iteration]: https://github.com/tc39/proposal-async-iteration
+//! [tc39-observable]: https://github.com/tc39/proposal-observable
 
 #[cfg(feature = "combine")]
 pub use crate::combine::combine;
 #[cfg(feature = "concat")]
 pub use crate::concat::concat;
+pub use crate::core::*;
 #[cfg(feature = "filter")]
 pub use crate::filter::filter;
 #[cfg(feature = "flatten")]
@@ -37,6 +192,7 @@ pub use crate::take::take;
 mod combine;
 #[cfg(feature = "concat")]
 mod concat;
+mod core;
 #[cfg(feature = "filter")]
 mod filter;
 #[cfg(feature = "flatten")]
@@ -62,59 +218,6 @@ mod skip;
 #[cfg(feature = "take")]
 mod take;
 
-/// A message passed to a [`Callbag`].
-///
-/// See <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L12-L22>
-#[derive(Clone, Debug)]
-pub enum Message<I, O> {
-    Handshake(Arc<Callbag<O, I>>),
-    Data(I),
-    Pull,
-    Error(Arc<dyn Error + Send + Sync + 'static>),
-    Terminate,
-}
-
-/// A `Callbag` dynamically receives input of type `I` and dynamically delivers output of type `O`.
-///
-/// See <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L24-L30>
-pub struct Callbag<I, O>(CallbagFn<I, O>);
-
-/// A source only delivers data.
-///
-/// See <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L32-L35>
-pub type Source<T> = Callbag<Never, T>;
-
-/// A sink only receives data.
-///
-/// See <https://github.com/callbag/callbag/blob/9020d6f68f31034a717465dce38235df749f3353/types.d.ts#L37-L40>
-pub type Sink<T> = Callbag<T, Never>;
-
-pub type CallbagFn<I, O> = Box<dyn Fn(Message<I, O>) + Send + Sync>;
-
-impl<I, O> Deref for Callbag<I, O> {
-    type Target = CallbagFn<I, O>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<I, O> Debug for Callbag<I, O> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Callbag<{}, {}>",
-            std::any::type_name::<I>(),
-            std::any::type_name::<O>(),
-        )
-    }
-}
-
-impl<I, O, F: 'static> From<F> for Callbag<I, O>
-where
-    F: Fn(Message<I, O>) + Send + Sync,
-{
-    fn from(handler: F) -> Self {
-        Callbag(Box::new(handler))
-    }
-}
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;

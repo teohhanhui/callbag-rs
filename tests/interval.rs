@@ -125,7 +125,7 @@ async fn interval_1000_can_be_disposed_before_anything_is_sent() {
         )
     };
 
-    interval(Duration::from_millis(1000), nursery.clone())(Message::Handshake(observe));
+    interval(Duration::from_millis(1_000), nursery.clone())(Message::Handshake(observe));
 
     drop(nursery);
     nursery_out.await;

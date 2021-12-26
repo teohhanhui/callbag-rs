@@ -5,17 +5,17 @@ use crate::{Message, Source};
 
 /// Callbag operator that flattens a higher-order callbag source.
 ///
-/// Like [ReactiveX `switch`] or [xstream `flatten`]. Use it with [`map`] to get behavior
-/// equivalent to [RxJS `switchMap`].
+/// Like [ReactiveX `switch`][reactivex-switch] or [xstream `flatten`][xstream-flatten]. Use it
+/// with [`map`] to get behavior equivalent to [RxJS `switchMap`][rxjs-switch-map].
 ///
 /// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/index.js#L1-L43>
 ///
 /// [`map`]: crate::map()
-/// [ReactiveX `switch`]: https://reactivex.io/documentation/operators/switch.html
-/// [RxJS `switchMap`]: https://rxjs.dev/api/operators/switchMap
-/// [xstream `flatten`]: https://github.com/staltz/xstream#flatten
+/// [reactivex-switch]: https://reactivex.io/documentation/operators/switch.html
+/// [rxjs-switch-map]: https://rxjs.dev/api/operators/switchMap
+/// [xstream-flatten]: https://github.com/staltz/xstream#flatten
 pub fn flatten<T: 'static, S, R: 'static>(source: S) -> Source<T>
 where
     S: Into<Arc<Source<R>>>,
