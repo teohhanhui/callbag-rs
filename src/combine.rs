@@ -1,5 +1,4 @@
 use arc_swap::{ArcSwap, ArcSwapOption};
-use paste::paste;
 use std::sync::{
     atomic::{AtomicUsize, Ordering as AtomicOrdering},
     Arc,
@@ -29,10 +28,10 @@ macro_rules! combine {
 macro_rules! combine_impls {
     ($(
         $Combine:ident {
-            $(($idx:literal) -> $T:ident)+
+            $(($idx:tt) -> $T:ident)+
         }
     )+) => {
-        $(paste! {
+        $(
             impl<$($T),+> Unwrap for ($(Option<$T>,)+) {
                 type Output = ($($T,)+);
 
@@ -140,7 +139,7 @@ macro_rules! combine_impls {
                     .into()
                 }
             }
-        })+
+        )+
     };
 }
 
