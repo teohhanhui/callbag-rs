@@ -2,6 +2,8 @@
 
 ##  Unreleased
 
+##  v0.13.0 - 2021-12-28
+
 ### Added
 
 -   Implement `interval`
