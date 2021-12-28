@@ -63,8 +63,7 @@ use crate::{Message, Source};
 ///                 });
 ///             })(source);
 ///         }
-///     })
-///     .unwrap();
+///     })?;
 ///
 /// drop(nursery);
 /// async_std::task::block_on(async_std::future::timeout(
@@ -74,6 +73,8 @@ use crate::{Message, Source};
 ///
 /// assert_eq!(vec_1.load()[..], [0, 1, 2, 3, 4, 5]);
 /// assert_eq!(vec_2.load()[..], [3, 4, 5]);
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// Share a pullable source to two pullers:
@@ -128,12 +129,14 @@ use crate::{Message, Source};
 /// )));
 ///
 /// let talkback = talkback.load();
-/// let talkback = talkback.as_ref().unwrap();
+/// let talkback = talkback.as_ref().ok_or("no talkback")?;
 /// talkback(Message::Pull);
 /// talkback(Message::Pull);
 ///
 /// assert_eq!(vec_1.load()[..], ["a10", "a20"]);
 /// assert_eq!(vec_2.load()[..], ["b10", "b20"]);
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// [rxjs-share]: https://rxjs.dev/api/operators/share
