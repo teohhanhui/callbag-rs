@@ -1,5 +1,7 @@
 #   callbag-rs
 
+Rust implementation of the [callbag spec][callbag-spec] for reactive/iterable programming.
+
 Basic [callbag][callbag-spec] factories and operators to get started with.
 
 **Highlights:**
@@ -174,6 +176,13 @@ at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as
 defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+##  Acknowledgements
+
+Thanks to André Staltz ([@staltz](https://github.com/staltz)) for creating the [callbag spec][callbag-spec].
+
+This library is a port of <https://github.com/staltz/callbag-basics>. Some inspiration was taken from
+<https://github.com/f5io/callbag.rs>.
 
 [callbag-spec]: https://github.com/callbag/callbag
 [crates-badge]: https://img.shields.io/crates/v/callbag

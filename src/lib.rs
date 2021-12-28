@@ -1,3 +1,5 @@
+//! # Rust implementation of the [callbag spec][callbag-spec] for reactive/iterable programming
+//!
 //! Basic [callbag][callbag-spec] factories and operators to get started with.
 //!
 //! **Highlights:**
