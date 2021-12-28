@@ -16,6 +16,126 @@ use crate::{Message, Source};
 ///
 /// See <https://github.com/staltz/callbag-share/blob/d96748edec631800ec5e606018f519ccaeb8f766/index.js#L1-L32>
 ///
+/// # Examples
+///
+/// Share a listenable source to two listeners:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::{NurseExt, Nursery};
+/// use futures_timer::Delay;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{for_each, interval, share};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec_1 = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let vec_2 = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = Arc::new(share(interval(Duration::from_millis(1_000), nursery.clone())));
+///
+/// for_each({
+///     let vec = Arc::clone(&vec_1);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(Arc::clone(&source));
+///
+/// nursery
+///     .clone()
+///     .nurse({
+///         let vec = Arc::clone(&vec_2);
+///         let timeout = Delay::new(Duration::from_millis(3_500));
+///         async move {
+///             timeout.await;
+///             for_each(move |x| {
+///                 println!("{}", x);
+///                 vec.rcu(move |vec| {
+///                     let mut vec = (**vec).clone();
+///                     vec.push(x);
+///                     vec
+///                 });
+///             })(source);
+///         }
+///     })
+///     .unwrap();
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(6_500),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(vec_1.load()[..], [0, 1, 2, 3, 4, 5]);
+/// assert_eq!(vec_2.load()[..], [3, 4, 5]);
+/// ```
+///
+/// Share a pullable source to two pullers:
+///
+/// ```
+/// use arc_swap::{ArcSwap, ArcSwapOption};
+/// use std::sync::Arc;
+///
+/// use callbag::{from_iter, share, Message};
+///
+/// let vec_1 = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let vec_2 = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = share(from_iter([10, 20, 30, 40, 50]));
+///
+/// let talkback = Arc::new(ArcSwapOption::from(None));
+/// source(Message::Handshake(Arc::new(
+///     {
+///         let vec = Arc::clone(&vec_1);
+///         let talkback = Arc::clone(&talkback);
+///         move |message| {
+///             if let Message::Handshake(sink) = message {
+///                 talkback.store(Some(sink));
+///             } else if let Message::Data(data) = message {
+///                 println!("a{}", data);
+///                 vec.rcu(move |vec| {
+///                     let mut vec = (**vec).clone();
+///                     vec.push(format!("a{}", data));
+///                     vec
+///                 });
+///             }
+///         }
+///     }
+///     .into()
+/// )));
+///
+/// source(Message::Handshake(Arc::new(
+///     {
+///         let vec = Arc::clone(&vec_2);
+///         move |message| {
+///             if let Message::Data(data) = message {
+///                 println!("b{}", data);
+///                 vec.rcu(move |vec| {
+///                     let mut vec = (**vec).clone();
+///                     vec.push(format!("b{}", data));
+///                     vec
+///                 });
+///             }
+///         }
+///     }
+///     .into()
+/// )));
+///
+/// let talkback = talkback.load();
+/// let talkback = talkback.as_ref().unwrap();
+/// talkback(Message::Pull);
+/// talkback(Message::Pull);
+///
+/// assert_eq!(vec_1.load()[..], ["a10", "a20"]);
+/// assert_eq!(vec_2.load()[..], ["b10", "b20"]);
+/// ```
+///
 /// [rxjs-share]: https://rxjs.dev/api/operators/share
 pub fn share<T: 'static, S>(source: S) -> Source<T>
 where

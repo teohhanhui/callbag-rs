@@ -8,11 +8,67 @@ use std::{
 
 use crate::{Message, Source};
 
-/// Converts an iterator to a callbag pullable source.
+/// Converts an [iterable][`IntoIterator`] or [`Iterator`] to a callbag pullable source.
 ///
 /// It only sends data when requested.
 ///
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/index.js#L1-L34>
+///
+/// # Examples
+///
+/// Convert an iterable:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use std::sync::Arc;
+///
+/// use callbag::{for_each, from_iter};
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = from_iter([10, 20, 30, 40]);
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// assert_eq!(vec.load()[..], [10, 20, 30, 40]);
+/// ```
+///
+/// Convert an Iterator:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use std::sync::Arc;
+///
+/// use callbag::{for_each, from_iter};
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = from_iter([10, 20, 30, 40].into_iter().enumerate());
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{:?}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// assert_eq!(vec.load()[..], [(0, 10), (1, 20), (2, 30), (3, 40)]);
+/// ```
 pub fn from_iter<T: 'static, I: 'static>(iter: I) -> Source<T>
 where
     T: Send + Sync,

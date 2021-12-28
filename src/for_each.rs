@@ -9,6 +9,71 @@ use crate::{Message, Source};
 /// source, it will observe its data.
 ///
 /// See <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/readme.js#L40-L47>
+///
+/// # Examples
+///
+/// Consume a pullable source:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use std::sync::Arc;
+///
+/// use callbag::{for_each, from_iter};
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = from_iter([10, 20, 30, 40]);
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// assert_eq!(vec.load()[..], [10, 20, 30, 40]);
+/// ```
+///
+/// Consume a listenable source:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::Nursery;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{for_each, interval};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = interval(Duration::from_millis(1_000), nursery.clone());
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(4_500),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(vec.load()[..], [0, 1, 2, 3]);
+/// ```
 pub fn for_each<T: 'static, F: 'static, S>(f: F) -> Box<dyn Fn(S)>
 where
     F: Fn(T) + Send + Sync + Clone,

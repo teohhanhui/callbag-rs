@@ -12,6 +12,45 @@ use crate::{Message, Source};
 ///
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/index.js#L1-L43>
 ///
+/// # Examples
+///
+/// ## Listenables
+///
+/// ## Pullables
+///
+/// Loop over two iterables (such as arrays) and combine their values together:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use std::sync::Arc;
+///
+/// use callbag::{flatten, for_each, from_iter, map, pipe};
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = pipe!(
+///     from_iter("hi".chars()),
+///     map(|r#char| pipe!(
+///         from_iter([10, 20, 30]),
+///         map(move |num| format!("{}{}", r#char, num)),
+///     )),
+///     flatten,
+///     for_each({
+///         let vec = Arc::clone(&vec);
+///         move |x: String| {
+///             println!("{}", x);
+///             vec.rcu(move |vec| {
+///                 let mut vec = (**vec).clone();
+///                 vec.push(x.clone());
+///                 vec
+///             });
+///         }
+///     }),
+/// );
+///
+/// assert_eq!(vec.load()[..], ["h10", "h20", "h30", "i10", "i20", "i30"]);
+/// ```
+///
 /// [`map`]: crate::map()
 /// [reactivex-switch]: https://reactivex.io/documentation/operators/switch.html
 /// [rxjs-switch-map]: https://rxjs.dev/api/operators/switchMap

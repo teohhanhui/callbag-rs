@@ -12,7 +12,58 @@ use crate::{Message, Source};
 ///
 /// Works with both pullable and listenable sources.
 ///
-/// See <https://github.com/staltz/callbag-combine/blob/912a5ec8ec3d9e65d3beccdc7a53eabd624c1c8a/readme.js#L32-L71>
+/// See <https://github.com/staltz/callbag-combine/blob/44b4f0f4295e0f5f9dbe9610d0548beca93fe376/readme.js#L32-L71>
+///
+/// # Examples
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::Nursery;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{combine, for_each, interval};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = combine!(
+///     interval(Duration::from_millis(100), nursery.clone()).into(),
+///     interval(Duration::from_millis(350), nursery.clone()).into(),
+/// );
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{:?}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(1_000),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(
+///     vec.load()[..],
+///     [
+///         (2, 0),
+///         (3, 0),
+///         (4, 0),
+///         (5, 0),
+///         (6, 0),
+///         (6, 1),
+///         (7, 1),
+///         (8, 1),
+///     ]
+/// );
+/// ```
 ///
 /// # Implementation notes
 ///
@@ -271,12 +322,13 @@ trait Unwrap {
 ///
 /// Works with both pullable and listenable sources.
 ///
-/// See <https://github.com/staltz/callbag-combine/blob/912a5ec8ec3d9e65d3beccdc7a53eabd624c1c8a/readme.js#L32-L71>
+/// See <https://github.com/staltz/callbag-combine/blob/44b4f0f4295e0f5f9dbe9610d0548beca93fe376/readme.js#L32-L71>
 ///
 /// # Implementation notes
 ///
 /// Due to a temporary restriction in Rust’s type system, the `Combine` trait is only implemented
 /// on tuples of arity 12 or less.
+#[doc(hidden)]
 pub fn combine<T: Combine>(sources: T) -> Source<<T as Combine>::Output> {
     sources.combine()
 }

@@ -7,6 +7,242 @@
 ///
 /// See <https://github.com/staltz/callbag-pipe/blob/a2e5b985ce7aa55de2749e1c3e08867f45edc6fa/readme.js#L110-L114>
 ///
+/// # Examples
+///
+/// Create a source with `pipe!`, then pass it to a [`for_each`]:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::Nursery;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{combine, for_each, interval, map, pipe, take};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = pipe!(
+///     combine!(
+///         interval(Duration::from_millis(100), nursery.clone()).into(),
+///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///     ),
+///     map(|(x, y)| format!("X{},Y{}", x, y)),
+///     take(10),
+/// );
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x: String| {
+///         println!("{:?}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x.clone());
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(1_100),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(
+///     vec.load()[..],
+///     [
+///         "X2,Y0",
+///         "X3,Y0",
+///         "X4,Y0",
+///         "X5,Y0",
+///         "X6,Y0",
+///         "X6,Y1",
+///         "X7,Y1",
+///         "X8,Y1",
+///         "X9,Y2",
+///     ]
+/// );
+/// ```
+///
+/// Or use `pipe!` to go all the way from source to sink:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::Nursery;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{combine, for_each, interval, map, pipe, take};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = pipe!(
+///     combine!(
+///         interval(Duration::from_millis(100), nursery.clone()).into(),
+///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///     ),
+///     map(|(x, y)| format!("X{},Y{}", x, y)),
+///     take(10),
+///     for_each({
+///         let vec = Arc::clone(&vec);
+///         move |x: String| {
+///             println!("{:?}", x);
+///             vec.rcu(move |vec| {
+///                 let mut vec = (**vec).clone();
+///                 vec.push(x.clone());
+///                 vec
+///             });
+///         }
+///     }),
+/// );
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(1_100),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(
+///     vec.load()[..],
+///     [
+///         "X2,Y0",
+///         "X3,Y0",
+///         "X4,Y0",
+///         "X5,Y0",
+///         "X6,Y0",
+///         "X6,Y1",
+///         "X7,Y1",
+///         "X8,Y1",
+///         "X9,Y2",
+///     ]
+/// );
+/// ```
+///
+/// # Nesting
+///
+/// To use `pipe!` inside another `pipe!`, you need to give the inner `pipe!` an argument, e.g.
+/// `|s| pipe!(s, ...`:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::Nursery;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{combine, for_each, interval, map, pipe, take};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = pipe!(
+///     combine!(
+///         interval(Duration::from_millis(100), nursery.clone()).into(),
+///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///     ),
+///     |s| pipe!(
+///         s,
+///         map(|(x, y)| format!("X{},Y{}", x, y)),
+///         take(10),
+///     ),
+///     for_each({
+///         let vec = Arc::clone(&vec);
+///         move |x: String| {
+///             println!("{:?}", x);
+///             vec.rcu(move |vec| {
+///                 let mut vec = (**vec).clone();
+///                 vec.push(x.clone());
+///                 vec
+///             });
+///         }
+///     }),
+/// );
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(1_100),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(
+///     vec.load()[..],
+///     [
+///         "X2,Y0",
+///         "X3,Y0",
+///         "X4,Y0",
+///         "X5,Y0",
+///         "X6,Y0",
+///         "X6,Y1",
+///         "X7,Y1",
+///         "X8,Y1",
+///         "X9,Y2",
+///     ]
+/// );
+/// ```
+///
+/// This means you can use `pipe!` to create a new operator:
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::Nursery;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{combine, for_each, interval, map, pipe, take};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let map_then_take = |f, amount| {
+///     move |s| pipe!(s, map(f), take(amount))
+/// };
+///
+/// let source = pipe!(
+///     combine!(
+///         interval(Duration::from_millis(100), nursery.clone()).into(),
+///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///     ),
+///     |s| pipe!(
+///         s,
+///         map_then_take(|(x, y)| format!("X{},Y{}", x, y), 10),
+///     ),
+///     for_each({
+///         let vec = Arc::clone(&vec);
+///         move |x: String| {
+///             println!("{:?}", x);
+///             vec.rcu(move |vec| {
+///                 let mut vec = (**vec).clone();
+///                 vec.push(x.clone());
+///                 vec
+///             });
+///         }
+///     }),
+/// );
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(1_100),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(
+///     vec.load()[..],
+///     [
+///         "X2,Y0",
+///         "X3,Y0",
+///         "X4,Y0",
+///         "X5,Y0",
+///         "X6,Y0",
+///         "X6,Y1",
+///         "X7,Y1",
+///         "X8,Y1",
+///         "X9,Y2",
+///     ]
+/// );
+/// ```
+///
+/// [`for_each`]: crate::for_each()
 /// [lodash-flow]: https://lodash.com/docs/#flow
 /// [ramda-pipe]: https://ramdajs.com/docs/#pipe
 #[macro_export]

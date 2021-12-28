@@ -14,6 +14,33 @@ use crate::{Message, Source};
 /// Works with both pullable and listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-concat/blob/db3ce91a831309057e165f344a87aa1615b4774e/readme.js#L29-L64>
+///
+/// # Examples
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use std::sync::Arc;
+///
+/// use callbag::{concat, for_each, from_iter};
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = concat!(from_iter(["10", "20", "30"]), from_iter(["a", "b"]));
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// assert_eq!(vec.load()[..], ["10", "20", "30", "a", "b"]);
+/// ```
 #[macro_export]
 macro_rules! concat {
     ($($s:expr),* $(,)?) => {
@@ -29,6 +56,7 @@ macro_rules! concat {
 /// Works with both pullable and listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-concat/blob/db3ce91a831309057e165f344a87aa1615b4774e/readme.js#L29-L64>
+#[doc(hidden)]
 pub fn concat<T: 'static, S: 'static>(sources: Box<[S]>) -> Source<T>
 where
     S: Into<Arc<Source<T>>> + Send + Sync,

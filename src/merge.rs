@@ -12,6 +12,45 @@ use crate::{Message, Source};
 /// designed for listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/readme.js#L29-L60>
+///
+/// # Examples
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use async_nursery::Nursery;
+/// use std::{sync::Arc, time::Duration};
+///
+/// use callbag::{for_each, interval, merge};
+///
+/// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = merge!(
+///     interval(Duration::from_millis(100), nursery.clone()),
+///     interval(Duration::from_millis(350), nursery.clone()),
+/// );
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// drop(nursery);
+/// async_std::task::block_on(async_std::future::timeout(
+///     Duration::from_millis(650),
+///     nursery_out,
+/// ));
+///
+/// assert_eq!(vec.load()[..], [0, 1, 2, 0, 3, 4, 5]);
+/// ```
 #[macro_export]
 macro_rules! merge {
     ($($s:expr),* $(,)?) => {
@@ -25,6 +64,7 @@ macro_rules! merge {
 /// designed for listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/readme.js#L29-L60>
+#[doc(hidden)]
 pub fn merge<T: 'static, S: 'static>(sources: Box<[S]>) -> Source<T>
 where
     S: Into<Arc<Source<T>>> + Send + Sync,

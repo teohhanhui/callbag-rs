@@ -7,6 +7,33 @@ use crate::{Message, Source};
 /// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-map/blob/b9d984b78bf4301d0525b21f928d896842e17a0a/readme.js#L24-L29>
+///
+/// # Examples
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use std::sync::Arc;
+///
+/// use callbag::{for_each, from_iter, map};
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let source = map(|x| (x as f64 * 0.1) as usize)(from_iter([10, 20, 30, 40]));
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(source);
+///
+/// assert_eq!(vec.load()[..], [1, 2, 3, 4]);
+/// ```
 pub fn map<I: 'static, O: 'static, F: 'static, S>(f: F) -> Box<dyn Fn(S) -> Source<O>>
 where
     F: Fn(I) -> O + Send + Sync + Clone,

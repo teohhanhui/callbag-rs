@@ -91,9 +91,9 @@
 //! let vec = Arc::new(ArcSwap::from_pointee(vec![]));
 //!
 //! pipe!(
-//!     from_iter(Range::new(40, 99)), // 10, 10.25, 10.5, 10.75, 11
-//!     take(5), // 40, 41, 42, 43, 44
-//!     map(|x| x as f64 / 4.0), // 10, 10.25, 10.5, 10.75, 11
+//!     from_iter(Range::new(40, 99)),
+//!     take(5),
+//!     map(|x| x as f64 / 4.0),
 //!     for_each({
 //!         let vec = Arc::clone(&vec);
 //!         move |x| {

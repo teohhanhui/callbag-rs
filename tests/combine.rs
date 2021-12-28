@@ -35,7 +35,7 @@ pub mod common;
 ))]
 wasm_bindgen_test_configure!(run_in_browser);
 
-/// See <https://github.com/staltz/callbag-combine/blob/912a5ec8ec3d9e65d3beccdc7a53eabd624c1c8a/test.js#L4-L48>
+/// See <https://github.com/staltz/callbag-combine/blob/44b4f0f4295e0f5f9dbe9610d0548beca93fe376/test.js#L4-L48>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(
@@ -134,7 +134,7 @@ async fn it_combines_1_async_finite_listenable_source() {
         .ok();
 }
 
-/// See <https://github.com/staltz/callbag-combine/blob/912a5ec8ec3d9e65d3beccdc7a53eabd624c1c8a/test.js#L50-L113>
+/// See <https://github.com/staltz/callbag-combine/blob/44b4f0f4295e0f5f9dbe9610d0548beca93fe376/test.js#L50-L113>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(
@@ -300,7 +300,7 @@ async fn it_combines_2_async_finite_listenable_sources() {
         .ok();
 }
 
-/// See <https://github.com/staltz/callbag-combine/blob/912a5ec8ec3d9e65d3beccdc7a53eabd624c1c8a/test.js#L115-L176>
+/// See <https://github.com/staltz/callbag-combine/blob/44b4f0f4295e0f5f9dbe9610d0548beca93fe376/test.js#L115-L176>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(
@@ -427,7 +427,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
         .ok();
 }
 
-/// See <https://github.com/staltz/callbag-combine/blob/912a5ec8ec3d9e65d3beccdc7a53eabd624c1c8a/test.js#L178-L281>
+/// See <https://github.com/staltz/callbag-combine/blob/44b4f0f4295e0f5f9dbe9610d0548beca93fe376/test.js#L178-L281>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 #[async_std::test]
 #[cfg_attr(
@@ -662,7 +662,7 @@ async fn it_combines_two_infinite_listenable_sources() {
         .ok();
 }
 
-/// See <https://github.com/staltz/callbag-combine/blob/912a5ec8ec3d9e65d3beccdc7a53eabd624c1c8a/test.js#L283-L356>
+/// See <https://github.com/staltz/callbag-combine/blob/44b4f0f4295e0f5f9dbe9610d0548beca93fe376/test.js#L283-L358>
 #[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),

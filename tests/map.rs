@@ -160,7 +160,7 @@ fn it_maps_a_pullable_source() {
     };
 
     let source = make_source();
-    let mapped = map(|x| (x as f32 * 0.1) as usize)(source);
+    let mapped = map(|x| (x as f64 * 0.1) as usize)(source);
     let sink = make_sink();
     mapped(Message::Handshake(sink));
 }
@@ -280,7 +280,7 @@ async fn it_maps_an_async_finite_source() {
     );
 
     let source = make_source();
-    let mapped = map(|x| (x as f32 * 0.1) as usize)(source);
+    let mapped = map(|x| (x as f64 * 0.1) as usize)(source);
     mapped(Message::Handshake(sink));
 
     drop(nursery);
@@ -407,7 +407,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     };
 
     let source = make_source();
-    let mapped = map(|x| (x as f32 * 0.1) as usize)(source);
+    let mapped = map(|x| (x as f64 * 0.1) as usize)(source);
     let sink = make_sink();
     mapped(Message::Handshake(sink));
 

@@ -5,12 +5,40 @@ use crate::{Message, Source};
 
 /// Callbag operator that combines consecutive values from the same source.
 ///
-/// It's essentially like [`Iterator::scan`], delivering a new accumulated value for each value from
-/// the callbag source.
+/// It's essentially like [`Iterator::scan`], delivering a new accumulated value for each value
+/// from the callbag source.
 ///
 /// Works on either pullable or listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-scan/blob/4ade1071e52f53a4b712d38f4e975f52ce8710c8/readme.js#L28-L40>
+///
+/// # Examples
+///
+/// ```
+/// use arc_swap::ArcSwap;
+/// use std::sync::Arc;
+///
+/// use callbag::{for_each, from_iter, scan};
+///
+/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+///
+/// let iter_source = from_iter([1, 2, 3, 4, 5]);
+/// let scanned = scan(|prev, x| prev + x, 0)(iter_source);
+///
+/// for_each({
+///     let vec = Arc::clone(&vec);
+///     move |x| {
+///         println!("{}", x);
+///         vec.rcu(move |vec| {
+///             let mut vec = (**vec).clone();
+///             vec.push(x);
+///             vec
+///         });
+///     }
+/// })(scanned);
+///
+/// assert_eq!(vec.load()[..], [1, 3, 6, 10, 15]);
+/// ```
 pub fn scan<I: 'static, O: 'static, F: 'static, S>(
     reducer: F,
     seed: O,
