@@ -1,0 +1,23 @@
+name: Cache Cargo build
+description: Cache Cargo build
+inputs:
+  rustc-commit-hash:
+    description: Commit hash of the rustc version
+    required: true
+  profile:
+    description: Cargo profile used
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Cache Cargo build
+      uses: actions/cache@v2
+      with:
+        # https://doc.rust-lang.org/cargo/guide/build-cache.html
+        path: |
+          target/
+        key: cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ inputs.rustc-commit-hash }}-${{ inputs.profile }}-${{ hashFiles('**/Cargo.toml') }}-${{ github.sha }}
+        restore-keys: |
+          cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ inputs.rustc-commit-hash }}-${{ inputs.profile }}-${{ hashFiles('**/Cargo.toml') }}-
+          cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ inputs.rustc-commit-hash }}-${{ inputs.profile }}-
+          cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ inputs.rustc-commit-hash }}-

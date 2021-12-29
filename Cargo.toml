@@ -64,6 +64,9 @@ share = []
 skip = []
 take = []
 
+[lib]
+doctest = false
+
 [[test]]
 name = "combine"
 required-features = ["combine"]

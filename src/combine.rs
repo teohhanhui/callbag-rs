@@ -16,7 +16,7 @@ use crate::{Message, Source};
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// use arc_swap::ArcSwap;
 /// use async_nursery::Nursery;
 /// use std::{sync::Arc, time::Duration};

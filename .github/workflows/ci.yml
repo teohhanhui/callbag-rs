@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS: -Dwarnings # https://github.com/rust-lang/cargo/issues/4423#issuecomment-404188918
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -Dwarnings # https://github.com/rust-lang/cargo/issues/4423#issuecomment-404188918
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -Dwarnings # https://github.com/rust-lang/cargo/issues/4423#issuecomment-404188918
+  RUST_BACKTRACE: short
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  clippy:
+    name: Clippy (${{ matrix.os }}) (Rust ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, beta, nightly]
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Cache Cargo home
+        uses: ./.github/actions/cache-cargo-home
+        continue-on-error: true
+      - name: Install Rust
+        id: install-rust
+        uses: ./.github/actions/install-rust
+        with:
+          toolchain: ${{ matrix.rust }}
+          target: wasm32-unknown-unknown wasm32-wasi
+          components: clippy
+      - name: Cache Cargo build
+        uses: ./.github/actions/cache-cargo-build
+        with:
+          rustc-commit-hash: ${{ steps.install-rust.outputs.rustc-commit-hash }}
+          profile: dev
+        continue-on-error: true
+      - name: Run Clippy
+        uses: ./.github/actions/cargo
+        with:
+          command: clippy
+          toolchain: ${{ matrix.rust }}
+          args: --tests
+      - name: Run Clippy (wasm32-unknown-unknown)
+        uses: ./.github/actions/cargo
+        with:
+          command: clippy
+          toolchain: ${{ matrix.rust }}
+          target: wasm32-unknown-unknown
+          args: --tests
+      - name: Run Clippy (wasm32-wasi)
+        uses: ./.github/actions/cargo
+        with:
+          command: clippy
+          toolchain: ${{ matrix.rust }}
+          target: wasm32-wasi
+          args: --tests
+
+  test:
+    name: Test (${{ matrix.os }}) (Rust ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, beta, nightly]
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Cache Cargo home
+        uses: ./.github/actions/cache-cargo-home
+        continue-on-error: true
+      - name: Install Rust
+        id: install-rust
+        uses: ./.github/actions/install-rust
+        with:
+          toolchain: ${{ matrix.rust }}
+          target: wasm32-unknown-unknown wasm32-wasi
+      - name: Cache Cargo build
+        uses: ./.github/actions/cache-cargo-build
+        with:
+          rustc-commit-hash: ${{ steps.install-rust.outputs.rustc-commit-hash }}
+          profile: test
+        continue-on-error: true
+      - name: Run tests
+        uses: ./.github/actions/cargo
+        with:
+          command: test
+          toolchain: ${{ matrix.rust }}
+      - name: Install wasm-pack
+        uses: ./.github/actions/install-wasm-pack
+      - name: Run tests (wasm32-unknown-unknown) (Node.js)
+        run: rustup run ${{ matrix.rust }} wasm-pack test --node
+      - name: Install cargo-wasi
+        uses: ./.github/actions/cargo
+        with:
+          command: install
+          args: cargo-wasi
+      - name: Install Wasmtime
+        uses: ./.github/actions/install-wasmtime
+      - name: Run tests (wasm32-wasi)
+        uses: ./.github/actions/cargo
+        with:
+          command: wasi
+          toolchain: ${{ matrix.rust }}
+          args: test
+      - name: Run doctests
+        uses: ./.github/actions/cargo
+        with:
+          command: test
+          toolchain: ${{ matrix.rust }}
+          args: --doc
+
+  rustdoc:
+    name: Rustdoc (Rust ${{ matrix.rust }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, beta, nightly]
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: ./.github/actions/install-rust
+        with:
+          toolchain: ${{ matrix.rust }}
+      - name: Run Rustdoc
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          toolchain: ${{ matrix.rust }}
+          args: --no-deps
+
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: ./.github/actions/install-rust
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: Run Rustfmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          toolchain: stable
+          args: -- --check

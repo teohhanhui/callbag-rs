@@ -1,0 +1,60 @@
+name: Cargo
+description: Run Cargo command
+inputs:
+  command:
+    description: Cargo command to run (ex. `check` or `build`)
+    required: true
+  toolchain:
+    description: Toolchain to use (without the `+` sign, ex. `nightly`)
+    required: true
+  target:
+    description: Target triple
+    required: false
+  args:
+    description: Arguments for the cargo command
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Set host target triple
+      if: ${{ !inputs.target }}
+      run: |
+        case ${{ runner.os }} in
+          Linux)
+            case ${{ runner.arch }} in
+              X64)
+                CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
+                ;;
+            esac
+            ;;
+          Windows)
+            case ${{ runner.arch }} in
+              X64)
+                CARGO_BUILD_TARGET=x86_64-pc-windows-msvc
+                ;;
+            esac
+            ;;
+          macOS)
+            case ${{ runner.arch }} in
+              X64)
+                CARGO_BUILD_TARGET=x86_64-apple-darwin
+                ;;
+            esac
+            ;;
+        esac
+        echo "CARGO_BUILD_TARGET=$CARGO_BUILD_TARGET" >> $GITHUB_ENV
+      shell: bash
+    - name: Run cargo ${{ inputs.command }}
+      if: ${{ !inputs.target }}
+      uses: actions-rs/cargo@v1
+      with:
+        command: ${{ inputs.command }}
+        toolchain: ${{ inputs.toolchain }}
+        args: --target ${{ env.CARGO_BUILD_TARGET }} ${{ inputs.args }}
+    - name: Run cargo ${{ inputs.command }}
+      if: ${{ inputs.target }}
+      uses: actions-rs/cargo@v1
+      with:
+        command: ${{ inputs.command }}
+        toolchain: ${{ inputs.toolchain }}
+        args: --target ${{ inputs.target }} ${{ inputs.args }}

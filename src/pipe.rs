@@ -11,7 +11,7 @@
 ///
 /// Create a source with `pipe!`, then pass it to a [`for_each`]:
 ///
-/// ```
+/// ```no_run
 /// use arc_swap::ArcSwap;
 /// use async_nursery::Nursery;
 /// use std::{sync::Arc, time::Duration};
@@ -60,6 +60,7 @@
 ///         "X6,Y1",
 ///         "X7,Y1",
 ///         "X8,Y1",
+///         "X9,Y1",
 ///         "X9,Y2",
 ///     ]
 /// );
@@ -67,7 +68,7 @@
 ///
 /// Or use `pipe!` to go all the way from source to sink:
 ///
-/// ```
+/// ```no_run
 /// use arc_swap::ArcSwap;
 /// use async_nursery::Nursery;
 /// use std::{sync::Arc, time::Duration};
@@ -115,6 +116,7 @@
 ///         "X6,Y1",
 ///         "X7,Y1",
 ///         "X8,Y1",
+///         "X9,Y1",
 ///         "X9,Y2",
 ///     ]
 /// );
@@ -125,7 +127,7 @@
 /// To use `pipe!` inside another `pipe!`, you need to give the inner `pipe!` an argument, e.g.
 /// `|s| pipe!(s, ...`:
 ///
-/// ```
+/// ```no_run
 /// use arc_swap::ArcSwap;
 /// use async_nursery::Nursery;
 /// use std::{sync::Arc, time::Duration};
@@ -176,6 +178,7 @@
 ///         "X6,Y1",
 ///         "X7,Y1",
 ///         "X8,Y1",
+///         "X9,Y1",
 ///         "X9,Y2",
 ///     ]
 /// );
@@ -183,7 +186,7 @@
 ///
 /// This means you can use `pipe!` to create a new operator:
 ///
-/// ```
+/// ```no_run
 /// use arc_swap::ArcSwap;
 /// use async_nursery::Nursery;
 /// use std::{sync::Arc, time::Duration};
@@ -237,6 +240,7 @@
 ///         "X6,Y1",
 ///         "X7,Y1",
 ///         "X8,Y1",
+///         "X9,Y1",
 ///         "X9,Y2",
 ///     ]
 /// );
