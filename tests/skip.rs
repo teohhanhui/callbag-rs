@@ -294,72 +294,62 @@ async fn it_skips_an_async_listenable_source() {
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
-                            {
-                                let timeout = Delay::new(Duration::from_millis(100));
-                                nursery
-                                    .clone()
-                                    .nurse({
-                                        let sink = Arc::clone(&sink);
-                                        async move {
-                                            timeout.await;
-                                            sink(Message::Data(10));
-                                        }
-                                    })
-                                    .unwrap();
-                            }
-                            {
-                                let timeout = Delay::new(Duration::from_millis(200));
-                                nursery
-                                    .clone()
-                                    .nurse({
-                                        let sink = Arc::clone(&sink);
-                                        async move {
-                                            timeout.await;
-                                            sink(Message::Data(20));
-                                        }
-                                    })
-                                    .unwrap();
-                            }
-                            {
-                                let timeout = Delay::new(Duration::from_millis(300));
-                                nursery
-                                    .clone()
-                                    .nurse({
-                                        let sink = Arc::clone(&sink);
-                                        async move {
-                                            timeout.await;
-                                            sink(Message::Data(30));
-                                        }
-                                    })
-                                    .unwrap();
-                            }
-                            {
-                                let timeout = Delay::new(Duration::from_millis(400));
-                                nursery
-                                    .clone()
-                                    .nurse({
-                                        let sink = Arc::clone(&sink);
-                                        async move {
-                                            timeout.await;
-                                            sink(Message::Data(40));
-                                        }
-                                    })
-                                    .unwrap();
-                            }
-                            {
-                                let timeout = Delay::new(Duration::from_millis(500));
-                                nursery
-                                    .clone()
-                                    .nurse({
-                                        let sink = Arc::clone(&sink);
-                                        async move {
-                                            timeout.await;
-                                            sink(Message::Data(50));
-                                            sink(Message::Terminate);
-                                        }
-                                    })
-                                    .unwrap();
-                            }
+                            nursery
+                                .clone()
+                                .nurse({
+                                    let sink = Arc::clone(&sink);
+                                    let timeout = Delay::new(Duration::from_millis(100));
+                                    async move {
+                                        timeout.await;
+                                        sink(Message::Data(10));
+                                    }
+                                })
+                                .unwrap();
+                            nursery
+                                .clone()
+                                .nurse({
+                                    let sink = Arc::clone(&sink);
+                                    let timeout = Delay::new(Duration::from_millis(200));
+                                    async move {
+                                        timeout.await;
+                                        sink(Message::Data(20));
+                                    }
+                                })
+                                .unwrap();
+                            nursery
+                                .clone()
+                                .nurse({
+                                    let sink = Arc::clone(&sink);
+                                    let timeout = Delay::new(Duration::from_millis(300));
+                                    async move {
+                                        timeout.await;
+                                        sink(Message::Data(30));
+                                    }
+                                })
+                                .unwrap();
+                            nursery
+                                .clone()
+                                .nurse({
+                                    let sink = Arc::clone(&sink);
+                                    let timeout = Delay::new(Duration::from_millis(400));
+                                    async move {
+                                        timeout.await;
+                                        sink(Message::Data(40));
+                                    }
+                                })
+                                .unwrap();
+                            nursery
+                                .clone()
+                                .nurse({
+                                    let sink = Arc::clone(&sink);
+                                    let timeout = Delay::new(Duration::from_millis(500));
+                                    async move {
+                                        timeout.await;
+                                        sink(Message::Data(50));
+                                        sink(Message::Terminate);
+                                    }
+                                })
+                                .unwrap();
                             let source = {
                                 let source_ref = &mut *source_ref.write().unwrap();
                                 source_ref.take().unwrap()
@@ -455,13 +445,13 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
-                            const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             nursery
                                 .clone()
                                 .nurse({
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(100);
+                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
                                             Pin::new(&mut interval).await;

@@ -171,7 +171,7 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     let iterated = Arc::new(AtomicBool::new(false));
     source(Message::Handshake(Arc::new(
         {
-            let iterated = iterated.clone();
+            let iterated = Arc::clone(&iterated);
             move |message| {
                 // println!("down: {:?}", message); // don't blow up stdout
                 if let Message::Handshake(source) = message {

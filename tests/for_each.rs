@@ -171,13 +171,13 @@ async fn it_observes_an_async_finite_listenable_source() {
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
-                            const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             nursery
                                 .clone()
                                 .nurse({
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(100);
+                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
                                             Pin::new(&mut interval).await;

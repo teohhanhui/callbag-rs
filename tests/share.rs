@@ -94,13 +94,13 @@ async fn it_shares_an_async_finite_listenable_source() {
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
-                            const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             nursery
                                 .clone()
                                 .nurse({
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(100);
+                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
                                             Pin::new(&mut interval).await;
@@ -182,16 +182,16 @@ async fn it_shares_an_async_finite_listenable_source() {
 
     let source = share(make_source());
     source(Message::Handshake(sink_a));
-    {
-        let timeout = Delay::new(Duration::from_millis(150));
-        nursery
-            .clone()
-            .nurse(async move {
+    nursery
+        .clone()
+        .nurse({
+            let timeout = Delay::new(Duration::from_millis(150));
+            async move {
                 timeout.await;
                 source(Message::Handshake(sink_b));
-            })
-            .unwrap();
-    }
+            }
+        })
+        .unwrap();
 
     drop(nursery);
     async_std::future::timeout(Duration::from_millis(700), nursery_out)
@@ -480,13 +480,13 @@ async fn it_disposes_only_when_last_sink_sends_upwards_end() {
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
-                            const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             nursery
                                 .clone()
                                 .nurse({
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(100);
+                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
                                             Pin::new(&mut interval).await;

@@ -71,12 +71,12 @@ async fn it_concats_1_async_finite_listenable_source() {
                     println!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let i = Arc::new(AtomicUsize::new(0));
-                        const DURATION: Duration = Duration::from_millis(100);
-                        let mut interval = Delay::new(DURATION);
                         nursery
                             .clone()
                             .nurse({
                                 let sink = Arc::clone(&sink);
+                                const DURATION: Duration = Duration::from_millis(100);
+                                let mut interval = Delay::new(DURATION);
                                 async move {
                                     loop {
                                         Pin::new(&mut interval).await;
@@ -172,12 +172,12 @@ async fn it_concats_2_async_finite_listenable_sources() {
                     println!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let i = Arc::new(AtomicUsize::new(0));
-                        const DURATION: Duration = Duration::from_millis(100);
-                        let mut interval = Delay::new(DURATION);
                         nursery
                             .clone()
                             .nurse({
                                 let sink = Arc::clone(&sink);
+                                const DURATION: Duration = Duration::from_millis(100);
+                                let mut interval = Delay::new(DURATION);
                                 async move {
                                     loop {
                                         Pin::new(&mut interval).await;
@@ -218,45 +218,39 @@ async fn it_concats_2_async_finite_listenable_sources() {
                 move |message: Message<Never, String>| {
                     println!("up (b): {:?}", message);
                     if let Message::Handshake(sink) = message {
-                        {
-                            let timeout = Delay::new(Duration::from_millis(230));
-                            nursery
-                                .clone()
-                                .nurse({
-                                    let sink = Arc::clone(&sink);
-                                    async move {
-                                        timeout.await;
-                                        sink(Message::Data("a".to_owned()));
-                                    }
-                                })
-                                .unwrap();
-                        }
-                        {
-                            let timeout = Delay::new(Duration::from_millis(460));
-                            nursery
-                                .clone()
-                                .nurse({
-                                    let sink = Arc::clone(&sink);
-                                    async move {
-                                        timeout.await;
-                                        sink(Message::Data("b".to_owned()));
-                                    }
-                                })
-                                .unwrap();
-                        }
-                        {
-                            let timeout = Delay::new(Duration::from_millis(550));
-                            nursery
-                                .clone()
-                                .nurse({
-                                    let sink = Arc::clone(&sink);
-                                    async move {
-                                        timeout.await;
-                                        sink(Message::Terminate);
-                                    }
-                                })
-                                .unwrap();
-                        }
+                        nursery
+                            .clone()
+                            .nurse({
+                                let sink = Arc::clone(&sink);
+                                let timeout = Delay::new(Duration::from_millis(230));
+                                async move {
+                                    timeout.await;
+                                    sink(Message::Data("a".to_owned()));
+                                }
+                            })
+                            .unwrap();
+                        nursery
+                            .clone()
+                            .nurse({
+                                let sink = Arc::clone(&sink);
+                                let timeout = Delay::new(Duration::from_millis(460));
+                                async move {
+                                    timeout.await;
+                                    sink(Message::Data("b".to_owned()));
+                                }
+                            })
+                            .unwrap();
+                        nursery
+                            .clone()
+                            .nurse({
+                                let sink = Arc::clone(&sink);
+                                let timeout = Delay::new(Duration::from_millis(550));
+                                async move {
+                                    timeout.await;
+                                    sink(Message::Terminate);
+                                }
+                            })
+                            .unwrap();
                         let source_b = {
                             let source_b_ref = &mut *source_b_ref.write().unwrap();
                             source_b_ref.take().unwrap()
@@ -543,13 +537,13 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
-                            const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             nursery
                                 .clone()
                                 .nurse({
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(100);
+                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
                                             Pin::new(&mut interval).await;
@@ -657,14 +651,14 @@ async fn it_propagates_source_error_to_sink_and_doesnt_subscribe_to_next_source(
                     move |message| {
                         println!("up: {:?}", message);
                         if let Message::Handshake(sink) = message {
-                            const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             nursery
                                 .clone()
                                 .nurse({
                                     let limit = Arc::clone(&limit);
                                     let value = Arc::clone(&value);
                                     let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(100);
+                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
                                             Pin::new(&mut interval).await;
