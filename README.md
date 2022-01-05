@@ -185,6 +185,10 @@ Thanks to André Staltz ([@staltz](https://github.com/staltz)) for creating the 
 This library is a port of <https://github.com/staltz/callbag-basics>. Some inspiration was taken from
 <https://github.com/f5io/callbag.rs>.
 
+Many thanks to the awesome folks on the [Rust Users Forum](https://users.rust-lang.org/) for their help, especially:
+- Alice Ryhl ([alice](https://users.rust-lang.org/u/alice))
+- Jessa ([jessa0](https://users.rust-lang.org/u/jessa0))
+
 [callbag-spec]: https://github.com/callbag/callbag
 [ci-badge]: https://github.com/teohhanhui/callbag-rs/actions/workflows/ci.yml/badge.svg
 [ci-url]: https://github.com/teohhanhui/callbag-rs/actions/workflows/ci.yml
