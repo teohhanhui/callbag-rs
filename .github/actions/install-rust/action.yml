@@ -1,0 +1,35 @@
+name: Install Rust
+description: Install Rust toolchain
+inputs:
+  toolchain:
+    description: Rust toolchain name
+    required: true
+  target:
+    description: Target triple to install for this toolchain
+    required: false
+  profile:
+    description: Name of the group of components to be installed for a new toolchain
+    required: false
+    default: minimal
+  components:
+    description: Comma-separated list of components to be additionally installed for a new toolchain
+    required: false
+outputs:
+  rustc-commit-hash:
+    description: Installed rustc version hash, can be used for caching purposes
+    value: ${{ steps.install-rust.outputs.rustc_hash }}
+runs:
+  using: composite
+  steps:
+    - name: Install Rust ${{ inputs.toolchain }}
+      id: install-rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        override: true
+        profile: ${{ inputs.profile }}
+        components: ${{ inputs.components }}
+    - name: Add target(s) to Rust ${{ inputs.toolchain }}
+      if: ${{ inputs.target }}
+      run: rustup target add --toolchain ${{ inputs.toolchain }} ${{ inputs.target }}
+      shell: bash

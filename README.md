@@ -14,6 +14,7 @@ Basic [callbag][callbag-spec] factories and operators to get started with.
 Imagine a hybrid between an [Observable][tc39-observable] and an [(Async)Iterable][tc39-async-iteration], that's what
 callbags are all about. It's all done with a few simple callbacks, following the [callbag spec][callbag-spec].
 
+[![CI][ci-badge]][ci-url]
 [![Crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]
 [![MIT OR Apache-2.0 licensed][license-badge]][license-url]
@@ -185,6 +186,8 @@ This library is a port of <https://github.com/staltz/callbag-basics>. Some inspi
 <https://github.com/f5io/callbag.rs>.
 
 [callbag-spec]: https://github.com/callbag/callbag
+[ci-badge]: https://github.com/teohhanhui/callbag-rs/actions/workflows/ci.yml/badge.svg
+[ci-url]: https://github.com/teohhanhui/callbag-rs/actions/workflows/ci.yml
 [crates-badge]: https://img.shields.io/crates/v/callbag
 [crates-url]: https://crates.io/crates/callbag
 [docs-badge]: https://img.shields.io/docsrs/callbag

@@ -1,0 +1,20 @@
+name: Install wasm-pack
+description: Install wasm-pack
+runs:
+  using: composite
+  steps:
+    - name: Install wasm-pack
+      if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
+      run: |
+        curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      shell: bash
+    - name: Install wasm-pack
+      if: ${{ runner.os == 'Windows' }}
+      run: |
+        $Uri = 'https://github.com/rustwasm/wasm-pack/releases/download/v0.10.2/wasm-pack-init.exe'
+        $ExeFile = 'wasm-pack-init.exe'
+        Invoke-WebRequest -Uri $Uri -OutFile $ExeFile
+        $ExeFile = Get-Item -Path .\$ExeFile
+        $Process = Start-Process -FilePath "$($ExeFile.FullName)" -Wait -NoNewWindow -PassThru
+        $Process | Select-Object -Property Id, ProcessName, ExitCode
+      shell: pwsh
