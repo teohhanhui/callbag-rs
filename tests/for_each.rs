@@ -13,9 +13,9 @@ use callbag::{for_each, Message, Source};
 
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
+    async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
-    futures_timer::Delay,
-    std::{pin::Pin, time::Duration},
+    std::time::Duration,
 };
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -172,16 +172,14 @@ async fn it_observes_an_async_finite_listenable_source() {
                         }
                         if let Message::Handshake(sink) = message {
                             nursery
-                                .clone()
                                 .nurse({
+                                    let nursery = nursery.clone();
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
                                     const DURATION: Duration = Duration::from_millis(100);
-                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
-                                            Pin::new(&mut interval).await;
-                                            interval.reset(DURATION);
+                                            nursery.sleep(DURATION).await;
                                             if sent.load(AtomicOrdering::Acquire) == 0 {
                                                 sent.fetch_add(1, AtomicOrdering::AcqRel);
                                                 sink(Message::Data(10));
@@ -231,8 +229,7 @@ async fn it_observes_an_async_finite_listenable_source() {
         assert_eq!(x, e, "downwards data is expected: {}", e);
     })(source);
 
+    let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(700), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }

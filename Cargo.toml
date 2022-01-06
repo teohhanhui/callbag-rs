@@ -11,8 +11,8 @@ categories = ["asynchronous", "concurrency"]
 
 [dependencies]
 arc-swap = "1.5.0"
-async_nursery = { version = "0.3.1", optional = true }
-futures-timer = { version = "3.0.2", optional = true }
+async_executors = { version = "0.5.1", optional = true }
+async_nursery = { version = "0.4.0", default-features = false, optional = true }
 never = "0.1.0"
 
 [dev-dependencies]
@@ -20,15 +20,10 @@ assert_matches = "1.5.0"
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes", "unstable"] }
-async_executors = { version = "0.4.2", features = ["async_std"] }
-async_nursery = "0.3.1"
-futures-timer = "3.0.2"
-
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
-futures-timer = { version = "3.0.2", features = ["wasm-bindgen"], optional = true }
+async_executors = { version = "0.5.1", features = ["async_std", "timer"] }
+async_nursery = "0.4.0"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dev-dependencies]
-futures-timer = { version = "3.0.2", features = ["wasm-bindgen"] }
 wasm-bindgen-test = "0.3.28"
 
 [features]
@@ -55,7 +50,7 @@ filter = []
 flatten = []
 for_each = []
 from_iter = []
-interval = ["async_nursery", "futures-timer"]
+interval = ["async_executors", "async_nursery"]
 map = []
 merge = []
 pipe = []
