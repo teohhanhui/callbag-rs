@@ -2,6 +2,11 @@
 
 ##  Unreleased
 
+### Breaking changes
+
+-   Upgrade `async_nursery`
+-   Change trait bounds on `nursery` parameter of `interval` function
+
 ##  v0.13.0 - 2021-12-28
 
 ### Added

@@ -22,8 +22,8 @@ use crate::{Message, Source};
 ///
 /// ```
 /// use arc_swap::ArcSwap;
+/// use async_executors::{Timer, TimerExt};
 /// use async_nursery::{NurseExt, Nursery};
-/// use futures_timer::Delay;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{for_each, interval, share};
@@ -50,10 +50,11 @@ use crate::{Message, Source};
 /// nursery
 ///     .clone()
 ///     .nurse({
+///         let nursery = nursery.clone();
 ///         let vec = Arc::clone(&vec_2);
-///         let timeout = Delay::new(Duration::from_millis(3_500));
+///         const DURATION: Duration = Duration::from_millis(3_500);
 ///         async move {
-///             timeout.await;
+///             nursery.sleep(DURATION).await;
 ///             for_each(move |x| {
 ///                 println!("{}", x);
 ///                 vec.rcu(move |vec| {
@@ -65,11 +66,9 @@ use crate::{Message, Source};
 ///         }
 ///     })?;
 ///
+/// let nursery_out = nursery.timeout(Duration::from_millis(6_500), nursery_out);
 /// drop(nursery);
-/// async_std::task::block_on(async_std::future::timeout(
-///     Duration::from_millis(6_500),
-///     nursery_out,
-/// ));
+/// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(vec_1.load()[..], [0, 1, 2, 3, 4, 5]);
 /// assert_eq!(vec_2.load()[..], [3, 4, 5]);

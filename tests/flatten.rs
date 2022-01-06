@@ -15,12 +15,11 @@ use callbag::{flatten, map, Message, Source};
 use crate::common::never;
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
+    async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
-    futures_timer::Delay,
     never::Never,
     std::{
         error::Error,
-        pin::Pin,
         sync::{atomic::AtomicBool, Condvar, Mutex},
         time::Duration,
     },
@@ -81,34 +80,34 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
                     println!("up (outer): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(230));
+                                const DURATION: Duration = Duration::from_millis(230);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("a"));
                                 }
                             })
                             .unwrap();
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(460));
+                                const DURATION: Duration = Duration::from_millis(460);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("b"));
                                 }
                             })
                             .unwrap();
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(690));
+                                const DURATION: Duration = Duration::from_millis(690);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Terminate);
                                 }
                             })
@@ -139,19 +138,17 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
                     nursery
-                        .clone()
                         .nurse({
+                            let nursery = nursery.clone();
                             let sink = Arc::clone(&sink);
                             let interval_cleared = Arc::clone(&interval_cleared);
                             const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             async move {
                                 loop {
-                                    Pin::new(&mut interval).await;
+                                    nursery.sleep(DURATION).await;
                                     if interval_cleared.load(AtomicOrdering::Acquire) {
                                         break;
                                     }
-                                    interval.reset(DURATION);
                                     let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                     sink(Message::Data(i));
                                     if i == 4 {
@@ -201,10 +198,9 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
     })(source_outer));
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(1_200), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(1200), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L72-L179>
@@ -461,34 +457,34 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
                     println!("up (outer): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(230));
+                                const DURATION: Duration = Duration::from_millis(230);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("a"));
                                 }
                             })
                             .unwrap();
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(460));
+                                const DURATION: Duration = Duration::from_millis(460);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("b"));
                                 }
                             })
                             .unwrap();
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(690));
+                                const DURATION: Duration = Duration::from_millis(690);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Error({
                                         let err: Box<dyn Error + Send + Sync + 'static> =
                                             "42".into();
@@ -529,19 +525,17 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
                     nursery
-                        .clone()
                         .nurse({
+                            let nursery = nursery.clone();
                             let sink = Arc::clone(&sink);
                             let interval_cleared = Arc::clone(&interval_cleared);
                             const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             async move {
                                 loop {
-                                    Pin::new(&mut interval).await;
+                                    nursery.sleep(DURATION).await;
                                     if interval_cleared.load(AtomicOrdering::Acquire) {
                                         break;
                                     }
-                                    interval.reset(DURATION);
                                     let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                     sink(Message::Data(i));
                                     if i == 4 {
@@ -591,10 +585,9 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
     })(source_outer));
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(1_200), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(1200), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L320-L391>
@@ -648,23 +641,23 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 
                     if let Message::Handshake(sink) = message {
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(230));
+                                const DURATION: Duration = Duration::from_millis(230);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("a"));
                                 }
                             })
                             .unwrap();
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(460));
+                                const DURATION: Duration = Duration::from_millis(460);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("b"));
                                 }
                             })
@@ -695,19 +688,17 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
                     nursery
-                        .clone()
                         .nurse({
+                            let nursery = nursery.clone();
                             let sink = Arc::clone(&sink);
                             let interval_cleared = Arc::clone(&interval_cleared);
                             const DURATION: Duration = Duration::from_millis(100);
-                            let mut interval = Delay::new(DURATION);
                             async move {
                                 loop {
-                                    Pin::new(&mut interval).await;
+                                    nursery.sleep(DURATION).await;
                                     if interval_cleared.load(AtomicOrdering::Acquire) {
                                         break;
                                     }
-                                    interval.reset(DURATION);
                                     let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                     sink(Message::Data(i));
                                     if i == 4 {
@@ -761,10 +752,9 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
     })(source_outer));
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(1_200), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(1200), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L393-L433>
@@ -847,7 +837,6 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                 if let Message::Handshake(source) = message {
                     let talkback = source;
                     nursery
-                        .clone()
                         .nurse({
                             let outer_completed_pair = Arc::clone(&outer_completed_pair);
                             async move {
@@ -874,10 +863,9 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
     })(source_outer));
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(100), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(100), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L435-L480>
@@ -965,7 +953,6 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                             sink(Message::Handshake(source_inner));
                         }
                         nursery
-                            .clone()
                             .nurse({
                                 let outer_completed_pair = Arc::clone(&outer_completed_pair);
                                 async move {
@@ -1009,8 +996,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
     let source = flatten(map(move |_| Arc::clone(&source_inner))(source_outer));
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(100), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(100), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }

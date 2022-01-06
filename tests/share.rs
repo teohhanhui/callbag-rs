@@ -11,10 +11,9 @@ use callbag::{share, Message, Source};
 
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
+    async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
-    futures_timer::Delay,
     std::{
-        pin::Pin,
         sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
         time::Duration,
     },
@@ -95,16 +94,14 @@ async fn it_shares_an_async_finite_listenable_source() {
                         }
                         if let Message::Handshake(sink) = message {
                             nursery
-                                .clone()
                                 .nurse({
+                                    let nursery = nursery.clone();
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
                                     const DURATION: Duration = Duration::from_millis(100);
-                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
-                                            Pin::new(&mut interval).await;
-                                            interval.reset(DURATION);
+                                            nursery.sleep(DURATION).await;
                                             if sent.load(AtomicOrdering::Acquire) == 0 {
                                                 sent.fetch_add(1, AtomicOrdering::AcqRel);
                                                 sink(Message::Data(10));
@@ -183,20 +180,19 @@ async fn it_shares_an_async_finite_listenable_source() {
     let source = share(make_source());
     source(Message::Handshake(sink_a));
     nursery
-        .clone()
         .nurse({
-            let timeout = Delay::new(Duration::from_millis(150));
+            let nursery = nursery.clone();
+            const DURATION: Duration = Duration::from_millis(150);
             async move {
-                timeout.await;
+                nursery.sleep(DURATION).await;
                 source(Message::Handshake(sink_b));
             }
         })
         .unwrap();
 
+    let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(700), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-share/blob/d96748edec631800ec5e606018f519ccaeb8f766/test.js#L93-L203>
@@ -330,7 +326,6 @@ async fn it_shares_a_pullable_source() {
                     if let Message::Handshake(source) = message {
                         talkback.store(Some(source));
                         nursery
-                            .clone()
                             .nurse({
                                 let talkback = Arc::clone(&talkback);
                                 async move {
@@ -348,7 +343,6 @@ async fn it_shares_a_pullable_source() {
                         }
                         if data == 20 {
                             nursery
-                                .clone()
                                 .nurse({
                                     let talkback = Arc::clone(&talkback);
                                     async move {
@@ -389,7 +383,6 @@ async fn it_shares_a_pullable_source() {
                         }
                         if data == 10 {
                             nursery
-                                .clone()
                                 .nurse({
                                     let talkback = Arc::clone(&talkback);
                                     async move {
@@ -413,10 +406,9 @@ async fn it_shares_a_pullable_source() {
     source(Message::Handshake(sink_a));
     source(Message::Handshake(sink_b));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(500), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(500), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-share/blob/d96748edec631800ec5e606018f519ccaeb8f766/test.js#L205-L293>
@@ -481,19 +473,17 @@ async fn it_disposes_only_when_last_sink_sends_upwards_end() {
                         }
                         if let Message::Handshake(sink) = message {
                             nursery
-                                .clone()
                                 .nurse({
+                                    let nursery = nursery.clone();
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
                                     const DURATION: Duration = Duration::from_millis(100);
-                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
-                                            Pin::new(&mut interval).await;
+                                            nursery.sleep(DURATION).await;
                                             if interval_cleared.load(AtomicOrdering::Acquire) {
                                                 break;
                                             }
-                                            interval.reset(DURATION);
                                             let sent =
                                                 sent.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                             sink(Message::Data(sent * 10));
@@ -585,10 +575,9 @@ async fn it_disposes_only_when_last_sink_sends_upwards_end() {
     source(Message::Handshake(sink_a));
     source(Message::Handshake(sink_b));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(900), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(900), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-share/blob/d96748edec631800ec5e606018f519ccaeb8f766/test.js#L295-L338>

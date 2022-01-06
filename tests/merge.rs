@@ -16,9 +16,9 @@ use callbag::{merge, Message, Source};
 
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
+    async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
-    futures_timer::Delay,
-    std::{pin::Pin, sync::atomic::AtomicBool, time::Duration},
+    std::{sync::atomic::AtomicBool, time::Duration},
 };
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -74,15 +74,13 @@ async fn it_merges_one_async_finite_listenable_source() {
                     if let Message::Handshake(sink) = message {
                         let i = Arc::new(AtomicUsize::new(0));
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
                                 const DURATION: Duration = Duration::from_millis(100);
-                                let mut interval = Delay::new(DURATION);
                                 async move {
                                     loop {
-                                        Pin::new(&mut interval).await;
-                                        interval.reset(DURATION);
+                                        nursery.sleep(DURATION).await;
                                         let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                         sink(Message::Data(i));
                                         if i == 3 {
@@ -130,10 +128,9 @@ async fn it_merges_one_async_finite_listenable_source() {
     let source = merge!(source_a);
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(700), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L50-L108>
@@ -174,15 +171,13 @@ async fn it_merges_two_async_finite_listenable_sources() {
                     if let Message::Handshake(sink) = message {
                         let i = Arc::new(AtomicUsize::new(0));
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
                                 const DURATION: Duration = Duration::from_millis(100);
-                                let mut interval = Delay::new(DURATION);
                                 async move {
                                     loop {
-                                        Pin::new(&mut interval).await;
-                                        interval.reset(DURATION);
+                                        nursery.sleep(DURATION).await;
                                         let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                         sink(Message::Data(format!("{}", i)));
                                         if i == 3 {
@@ -220,21 +215,20 @@ async fn it_merges_two_async_finite_listenable_sources() {
                     println!("up (b): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
-                            .clone()
                             .nurse({
                                 let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(250));
+                                const DURATION: Duration = Duration::from_millis(250);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("a".to_owned()));
                                     nursery
-                                        .clone()
                                         .nurse({
+                                            let nursery = nursery.clone();
                                             let sink = Arc::clone(&sink);
-                                            let timeout = Delay::new(Duration::from_millis(250));
+                                            const DURATION: Duration = Duration::from_millis(250);
                                             async move {
-                                                timeout.await;
+                                                nursery.sleep(DURATION).await;
                                                 sink(Message::Terminate);
                                             }
                                         })
@@ -279,10 +273,9 @@ async fn it_merges_two_async_finite_listenable_sources() {
     let source = merge!(source_a, source_b);
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(700), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L110-L168>
@@ -334,19 +327,17 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                         }
                         if let Message::Handshake(sink) = message {
                             nursery
-                                .clone()
                                 .nurse({
+                                    let nursery = nursery.clone();
                                     let sent = Arc::clone(&sent);
                                     let sink = Arc::clone(&sink);
                                     const DURATION: Duration = Duration::from_millis(100);
-                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
-                                            Pin::new(&mut interval).await;
+                                            nursery.sleep(DURATION).await;
                                             if interval_cleared.load(AtomicOrdering::Acquire) {
                                                 break;
                                             }
-                                            interval.reset(DURATION);
                                             let sent =
                                                 sent.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                             sink(Message::Data(sent * 10));
@@ -406,10 +397,9 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     let sink = make_sink();
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(700), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L170-L250>
@@ -465,16 +455,14 @@ async fn it_errors_when_one_of_the_sources_errors() {
                         }
                         if let Message::Handshake(sink) = message {
                             nursery
-                                .clone()
                                 .nurse({
+                                    let nursery = nursery.clone();
                                     let count = Arc::clone(&count);
                                     let sink = Arc::clone(&sink);
                                     const DURATION: Duration = Duration::from_millis(20);
-                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
-                                            Pin::new(&mut interval).await;
-                                            interval.reset(DURATION);
+                                            nursery.sleep(DURATION).await;
                                             let count =
                                                 count.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                             sink(Message::Data(format!("{}", count + 10)));
@@ -530,19 +518,17 @@ async fn it_errors_when_one_of_the_sources_errors() {
                         }
                         if let Message::Handshake(sink) = message {
                             nursery
-                                .clone()
                                 .nurse({
+                                    let nursery = nursery.clone();
                                     let count = Arc::clone(&count);
                                     let sink = Arc::clone(&sink);
                                     const DURATION: Duration = Duration::from_millis(30);
-                                    let mut interval = Delay::new(DURATION);
                                     async move {
                                         loop {
-                                            Pin::new(&mut interval).await;
+                                            nursery.sleep(DURATION).await;
                                             if interval_cleared.load(AtomicOrdering::Acquire) {
                                                 break;
                                             }
-                                            interval.reset(DURATION);
                                             let count =
                                                 count.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                             sink(Message::Data(format!("{}", count + 100)));
@@ -600,10 +586,9 @@ async fn it_errors_when_one_of_the_sources_errors() {
     let sink = make_sink();
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(700), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L252-L302>
@@ -680,12 +665,12 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
                     println!("up (slow): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let slow_source_ref = Arc::clone(&slow_source_ref);
-                                let timeout = Delay::new(Duration::from_millis(50));
+                                const DURATION: Duration = Duration::from_millis(50);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     let slow_source = {
                                         let slow_source_ref =
                                             &mut *slow_source_ref.write().unwrap();
@@ -734,10 +719,9 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
     let source = merge!(quick_source, slow_source);
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(500), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(500), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L304-L348>
@@ -809,12 +793,12 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
                         };
                         sink(Message::Handshake(source_b));
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(50));
+                                const DURATION: Duration = Duration::from_millis(50);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("a"));
                                     sink(Message::Terminate);
                                 }
@@ -852,10 +836,9 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
     let source = merge!(source_a, source_b);
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(500), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(500), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L350-L394>
@@ -927,12 +910,12 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
                         };
                         sink(Message::Handshake(source_b));
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let sink = Arc::clone(&sink);
-                                let timeout = Delay::new(Duration::from_millis(50));
+                                const DURATION: Duration = Duration::from_millis(50);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     sink(Message::Data("a"));
                                     sink(Message::Terminate);
                                 }
@@ -970,10 +953,9 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
     let source = merge!(source_b, source_a);
     source(Message::Handshake(sink));
 
+    let nursery_out = nursery.timeout(Duration::from_millis(500), nursery_out);
     drop(nursery);
-    async_std::future::timeout(Duration::from_millis(500), nursery_out)
-        .await
-        .ok();
+    nursery_out.await.ok();
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L396-L438>

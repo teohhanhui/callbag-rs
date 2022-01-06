@@ -1,7 +1,6 @@
+use async_executors::Timer;
 use async_nursery::{Nurse, NurseExt};
-use futures_timer::Delay;
 use std::{
-    pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
         Arc,
@@ -19,6 +18,7 @@ use crate::{Message, Source};
 ///
 /// ```
 /// use arc_swap::ArcSwap;
+/// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
 /// use std::{sync::Arc, time::Duration};
 ///
@@ -42,17 +42,15 @@ use crate::{Message, Source};
 ///     }
 /// })(source);
 ///
+/// let nursery_out = nursery.timeout(Duration::from_millis(4_500), nursery_out);
 /// drop(nursery);
-/// async_std::task::block_on(async_std::future::timeout(
-///     Duration::from_millis(4_500),
-///     nursery_out,
-/// ));
+/// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(vec.load()[..], [0, 1, 2, 3]);
 /// ```
 pub fn interval(
     period: Duration,
-    nursery: impl Nurse<()> + Send + Sync + 'static,
+    nursery: impl Nurse<()> + Timer + Send + Sync + Clone + 'static,
 ) -> Source<usize> {
     (move |message| {
         if let Message::Handshake(sink) = message {
@@ -60,16 +58,15 @@ pub fn interval(
             let interval_cleared = Arc::new(AtomicBool::new(false));
             nursery
                 .nurse({
+                    let nursery = nursery.clone();
                     let sink = Arc::clone(&sink);
                     let interval_cleared = Arc::clone(&interval_cleared);
-                    let mut interval = Delay::new(period);
                     async move {
                         loop {
-                            Pin::new(&mut interval).await;
+                            nursery.sleep(period).await;
                             if interval_cleared.load(AtomicOrdering::Acquire) {
                                 break;
                             }
-                            interval.reset(period);
                             let i = i.fetch_add(1, AtomicOrdering::AcqRel);
                             sink(Message::Data(i));
                         }

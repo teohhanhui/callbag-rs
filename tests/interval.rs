@@ -3,8 +3,8 @@ use callbag::{interval, Message};
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
     arc_swap::ArcSwapOption,
+    async_executors::Timer,
     async_nursery::{NurseExt, Nursery},
-    futures_timer::Delay,
     std::{
         collections::VecDeque,
         sync::{Arc, RwLock},
@@ -104,12 +104,12 @@ async fn interval_1000_can_be_disposed_before_anything_is_sent() {
                     if let Message::Handshake(source) = message {
                         talkback.store(Some(source));
                         nursery
-                            .clone()
                             .nurse({
+                                let nursery = nursery.clone();
                                 let talkback = Arc::clone(&talkback);
-                                let timeout = Delay::new(Duration::from_millis(200));
+                                const DURATION: Duration = Duration::from_millis(200);
                                 async move {
-                                    timeout.await;
+                                    nursery.sleep(DURATION).await;
                                     let talkback = talkback.load();
                                     let talkback = talkback.as_ref().unwrap();
                                     talkback(Message::Terminate);
