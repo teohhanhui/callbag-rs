@@ -19,6 +19,7 @@ use crate::{Message, Source};
 ///
 /// ```no_run
 /// use arc_swap::ArcSwap;
+/// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
 /// use std::{sync::Arc, time::Duration};
 ///
@@ -45,11 +46,9 @@ use crate::{Message, Source};
 ///     }
 /// })(source);
 ///
+/// let nursery_out = nursery.timeout(Duration::from_millis(1_000), nursery_out);
 /// drop(nursery);
-/// async_std::task::block_on(async_std::future::timeout(
-///     Duration::from_millis(1_000),
-///     nursery_out,
-/// ));
+/// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(
 ///     vec.load()[..],
