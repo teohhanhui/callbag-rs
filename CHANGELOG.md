@@ -2,6 +2,10 @@
 
 ##  Unreleased
 
+### Changed
+
+-   Accept `Source<T>` and `Box<Source<T>>` in addition to `Arc<Source<T>>` in `combine` operator
+
 ### Breaking changes
 
 -   Upgrade `async_nursery`

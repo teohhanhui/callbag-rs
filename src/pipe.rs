@@ -24,8 +24,8 @@
 ///
 /// let source = pipe!(
 ///     combine!(
-///         interval(Duration::from_millis(100), nursery.clone()).into(),
-///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///         interval(Duration::from_millis(100), nursery.clone()),
+///         interval(Duration::from_millis(350), nursery.clone()),
 ///     ),
 ///     map(|(x, y)| format!("X{},Y{}", x, y)),
 ///     take(10),
@@ -81,8 +81,8 @@
 ///
 /// let source = pipe!(
 ///     combine!(
-///         interval(Duration::from_millis(100), nursery.clone()).into(),
-///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///         interval(Duration::from_millis(100), nursery.clone()),
+///         interval(Duration::from_millis(350), nursery.clone()),
 ///     ),
 ///     map(|(x, y)| format!("X{},Y{}", x, y)),
 ///     take(10),
@@ -140,8 +140,8 @@
 ///
 /// let source = pipe!(
 ///     combine!(
-///         interval(Duration::from_millis(100), nursery.clone()).into(),
-///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///         interval(Duration::from_millis(100), nursery.clone()),
+///         interval(Duration::from_millis(350), nursery.clone()),
 ///     ),
 ///     |s| pipe!(
 ///         s,
@@ -203,8 +203,8 @@
 ///
 /// let source = pipe!(
 ///     combine!(
-///         interval(Duration::from_millis(100), nursery.clone()).into(),
-///         interval(Duration::from_millis(350), nursery.clone()).into(),
+///         interval(Duration::from_millis(100), nursery.clone()),
+///         interval(Duration::from_millis(350), nursery.clone()),
 ///     ),
 ///     |s| pipe!(
 ///         s,

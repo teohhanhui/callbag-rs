@@ -1,4 +1,5 @@
 use arc_swap::{ArcSwap, ArcSwapOption};
+use paste::paste;
 use std::sync::{
     atomic::{AtomicUsize, Ordering as AtomicOrdering},
     Arc,
@@ -28,8 +29,8 @@ use crate::{Message, Source};
 /// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
 ///
 /// let source = combine!(
-///     interval(Duration::from_millis(100), nursery.clone()).into(),
-///     interval(Duration::from_millis(350), nursery.clone()).into(),
+///     interval(Duration::from_millis(100), nursery.clone()),
+///     interval(Duration::from_millis(350), nursery.clone()),
 /// );
 ///
 /// for_each({
@@ -81,7 +82,7 @@ macro_rules! combine_impls {
         $Combine:ident {
             $(($idx:tt) -> $T:ident)+
         }
-    )+) => {
+    )+) => { paste! {
         $(
             impl<$($T),+> Unwrap for ($(Option<$T>,)+) {
                 type Output = ($($T,)+);
@@ -91,10 +92,19 @@ macro_rules! combine_impls {
                 }
             }
 
-            impl<$($T: Send + Sync + Clone + 'static),+> Combine for ($(Arc<Source<$T>>,)+) {
+            impl<$($T: 'static, [<S $T>]: 'static),+> Combine for ($([<S $T>],)+)
+            where
+                $(
+                    $T: Send + Sync + Clone,
+                    [<S $T>]: IntoArcSource<Output = $T> + Send + Sync,
+                )+
+            {
                 type Output = ($($T,)+);
 
                 fn combine(self) -> Source<Self::Output> {
+                    $(
+                        let [<source_ $idx>] = self.$idx.into_arc_source();
+                    )+
                     (move |message| {
                         if let Message::Handshake(sink) = message {
                             const N: usize = last_literal!($($idx,)+) + 1;
@@ -139,7 +149,7 @@ macro_rules! combine_impls {
                                 .into()
                             );
                             $(
-                                (self.$idx)(Message::Handshake(Arc::new(
+                                [<source_ $idx>](Message::Handshake(Arc::new(
                                     {
                                         let sink = Arc::clone(&sink);
                                         let n_start = Arc::clone(&n_start);
@@ -191,7 +201,7 @@ macro_rules! combine_impls {
                 }
             }
         )+
-    };
+    } };
 }
 
 macro_rules! last_literal {
@@ -310,10 +320,40 @@ pub trait Combine {
     fn combine(self) -> Source<Self::Output>;
 }
 
+pub trait IntoArcSource {
+    type Output;
+
+    fn into_arc_source(self) -> Arc<Source<Self::Output>>;
+}
+
 trait Unwrap {
     type Output;
 
     fn unwrap(self) -> Self::Output;
+}
+
+impl<T> IntoArcSource for Arc<Source<T>> {
+    type Output = T;
+
+    fn into_arc_source(self) -> Arc<Source<Self::Output>> {
+        self
+    }
+}
+
+impl<T> IntoArcSource for Source<T> {
+    type Output = T;
+
+    fn into_arc_source(self) -> Arc<Source<Self::Output>> {
+        Arc::new(self)
+    }
+}
+
+impl<T> IntoArcSource for Box<Source<T>> {
+    type Output = T;
+
+    fn into_arc_source(self) -> Arc<Source<Self::Output>> {
+        Arc::from(self)
+    }
 }
 
 /// Callbag factory that combines the latest data points from multiple (2 or more) callbag sources.
