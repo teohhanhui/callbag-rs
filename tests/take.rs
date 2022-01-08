@@ -6,6 +6,7 @@ use std::{
         Arc, RwLock,
     },
 };
+use tracing::info;
 
 use crate::common::MessagePredicate;
 
@@ -16,6 +17,7 @@ use {
     async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
     std::{sync::atomic::AtomicBool, time::Duration},
+    tracing_futures::Instrument,
 };
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -36,7 +38,8 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 /// See <https://github.com/staltz/callbag-take/blob/6ae7755ea5f014306704450a40eb72ffdb21d308/test.js#L4-L103>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -46,6 +49,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 )]
 async fn it_takes_from_a_pullable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -78,7 +82,7 @@ async fn it_takes_from_a_pullable_source() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message| {
-                        println!("up: {:?}", message);
+                        info!("up: {:?}", message);
                         {
                             let upwards_expected = &mut *upwards_expected.write().unwrap();
                             let e = upwards_expected.pop_front().unwrap();
@@ -192,7 +196,7 @@ async fn it_takes_from_a_pullable_source() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -230,7 +234,8 @@ async fn it_takes_from_a_pullable_source() {
 
 /// See <https://github.com/staltz/callbag-take/blob/6ae7755ea5f014306704450a40eb72ffdb21d308/test.js#L105-L155>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -240,6 +245,7 @@ async fn it_takes_from_a_pullable_source() {
 )]
 async fn it_takes_an_async_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -269,7 +275,7 @@ async fn it_takes_an_async_listenable_source() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message| {
-                        println!("up: {:?}", message);
+                        info!("up: {:?}", message);
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
                             let upwards_expected = &mut *upwards_expected.write().unwrap();
@@ -318,7 +324,7 @@ async fn it_takes_an_async_listenable_source() {
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -344,7 +350,8 @@ async fn it_takes_an_async_listenable_source() {
 
 /// See <https://github.com/staltz/callbag-take/blob/6ae7755ea5f014306704450a40eb72ffdb21d308/test.js#L157-L216>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -354,6 +361,7 @@ async fn it_takes_an_async_listenable_source() {
 )]
 async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -382,7 +390,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message| {
-                        println!("up: {:?}", message);
+                        info!("up: {:?}", message);
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
                             let upwards_expected = &mut *upwards_expected.write().unwrap();
@@ -433,7 +441,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -468,7 +476,8 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
 }
 
 /// See <https://github.com/staltz/callbag-take/blob/6ae7755ea5f014306704450a40eb72ffdb21d308/test.js#L218-L283>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -501,7 +510,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
         move |start| {
             Arc::new(
                 (move |message| {
-                    println!("up: {:?}", message);
+                    info!("up: {:?}", message);
                     let terminations = Arc::clone(&terminations);
                     let upwards_expected = Arc::clone(&upwards_expected);
                     if let Message::Handshake(sink) = message {
@@ -510,7 +519,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
                             {
                                 let sink = Arc::clone(&sink);
                                 move |message| {
-                                    println!("up: {:?}", message);
+                                    info!("up: {:?}", message);
                                     {
                                         let upwards_expected =
                                             &mut *upwards_expected.write().unwrap();
@@ -538,7 +547,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -577,7 +586,8 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
 }
 
 /// See <https://github.com/staltz/callbag-take/blob/6ae7755ea5f014306704450a40eb72ffdb21d308/test.js#L285-L351>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -591,7 +601,7 @@ fn it_does_not_mutually_terminate_a_sink() {
         move |start| {
             Arc::new(
                 (move |message| {
-                    println!("up: {:?}", message);
+                    info!("up: {:?}", message);
                     let terminations = Arc::clone(&terminations);
                     if let Message::Handshake(sink) = message {
                         let counter = Arc::new(AtomicUsize::new(start));
@@ -599,7 +609,7 @@ fn it_does_not_mutually_terminate_a_sink() {
                             {
                                 let sink = Arc::clone(&sink);
                                 move |message| {
-                                    println!("up: {:?}", message);
+                                    info!("up: {:?}", message);
                                     if let Message::Pull = message {
                                         let counter = counter.fetch_add(1, AtomicOrdering::AcqRel);
                                         sink(Message::Data(counter));
@@ -621,7 +631,7 @@ fn it_does_not_mutually_terminate_a_sink() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                     let talkback = talkback.load();
@@ -642,7 +652,7 @@ fn it_does_not_mutually_terminate_a_sink() {
         move |source: Source<usize>| {
             Arc::new(
                 (move |message| {
-                    println!("logger: {:?}", message);
+                    info!("logger: {:?}", message);
                     let logger_terminations = Arc::clone(&logger_terminations);
                     if let Message::Handshake(sink) = message {
                         let source_talkback: Arc<ArcSwapOption<Source<usize>>> =
@@ -652,7 +662,7 @@ fn it_does_not_mutually_terminate_a_sink() {
                                 let logger_terminations = Arc::clone(&logger_terminations);
                                 let source_talkback = Arc::clone(&source_talkback);
                                 move |message| {
-                                    println!("logger (from down): {:?}", message);
+                                    info!("logger (from down): {:?}", message);
                                     if let Message::Error(_) | Message::Terminate = message {
                                         logger_terminations.fetch_add(1, AtomicOrdering::AcqRel);
                                     }
@@ -665,7 +675,7 @@ fn it_does_not_mutually_terminate_a_sink() {
                         );
                         source(Message::Handshake(Arc::new(
                             (move |message| {
-                                println!("logger (from up): {:?}", message);
+                                info!("logger (from up): {:?}", message);
                                 if let Message::Error(_) | Message::Terminate = message {
                                     logger_terminations.fetch_add(1, AtomicOrdering::AcqRel);
                                 } else if let Message::Handshake(source) = message {

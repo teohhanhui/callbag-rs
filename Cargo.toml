@@ -18,11 +18,15 @@ paste = { version = "1.0.6", optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
+test-log = { version = "0.2.8", default-features = false, features = ["trace"] }
+tracing = "0.1.29"
+tracing-futures = "0.2.5"
+tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes", "unstable"] }
-async_executors = { version = "0.5.1", features = ["async_std", "timer"] }
-async_nursery = "0.4.0"
+async_executors = { version = "0.5.1", features = ["async_std", "timer", "tracing"] }
+async_nursery = { version = "0.4.0", features = ["tracing"] }
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dev-dependencies]
 wasm-bindgen-test = "0.3.28"

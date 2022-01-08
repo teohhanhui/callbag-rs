@@ -10,6 +10,8 @@ use {
         sync::{Arc, RwLock},
         time::Duration,
     },
+    tracing::info,
+    tracing_futures::Instrument,
 };
 
 #[cfg(all(
@@ -33,7 +35,8 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 /// See <https://github.com/staltz/callbag-interval/blob/45d4fd8fd977bdf2babb27f67e740b0ff0b44e1e/test.js#L4-L25>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -43,6 +46,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 )]
 async fn interval_50_sends_5_times_then_we_dispose_it() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let expected = [0, 1, 2, 3, 4];
     let expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(expected.into()));
@@ -51,7 +55,7 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                 } else if let Message::Data(data) = message {
@@ -83,7 +87,8 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
 
 /// See <https://github.com/staltz/callbag-interval/blob/45d4fd8fd977bdf2babb27f67e740b0ff0b44e1e/test.js#L27-L47>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -93,6 +98,7 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
 )]
 async fn interval_1000_can_be_disposed_before_anything_is_sent() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let observe = {
         let talkback = Arc::new(ArcSwapOption::from(None));
@@ -100,7 +106,7 @@ async fn interval_1000_can_be_disposed_before_anything_is_sent() {
             {
                 let nursery = nursery.clone();
                 move |message| {
-                    println!("down: {:?}", message);
+                    info!("down: {:?}", message);
                     if let Message::Handshake(source) = message {
                         talkback.store(Some(source));
                         nursery

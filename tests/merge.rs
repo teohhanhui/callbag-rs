@@ -9,6 +9,7 @@ use std::{
         Arc, RwLock,
     },
 };
+use tracing::info;
 
 use crate::common::{make_mock_callbag, MessageDirection, MessagePredicate};
 
@@ -19,6 +20,7 @@ use {
     async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
     std::{sync::atomic::AtomicBool, time::Duration},
+    tracing_futures::Instrument,
 };
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -39,7 +41,8 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L4-L48>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -49,6 +52,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 )]
 async fn it_merges_one_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -70,7 +74,7 @@ async fn it_merges_one_async_finite_listenable_source() {
                 let nursery = nursery.clone();
                 let source_a_ref = Arc::clone(&source_a_ref);
                 move |message| {
-                    println!("up (a): {:?}", message);
+                    info!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let i = Arc::new(AtomicUsize::new(0));
                         nursery
@@ -110,7 +114,7 @@ async fn it_merges_one_async_finite_listenable_source() {
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -135,7 +139,8 @@ async fn it_merges_one_async_finite_listenable_source() {
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L50-L108>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -145,6 +150,7 @@ async fn it_merges_one_async_finite_listenable_source() {
 )]
 async fn it_merges_two_async_finite_listenable_sources() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -167,7 +173,7 @@ async fn it_merges_two_async_finite_listenable_sources() {
                 let nursery = nursery.clone();
                 let source_a_ref = Arc::clone(&source_a_ref);
                 move |message| {
-                    println!("up (a): {:?}", message);
+                    info!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let i = Arc::new(AtomicUsize::new(0));
                         nursery
@@ -212,7 +218,7 @@ async fn it_merges_two_async_finite_listenable_sources() {
                 let nursery = nursery.clone();
                 let source_b_ref = Arc::clone(&source_b_ref);
                 move |message: Message<Never, String>| {
-                    println!("up (b): {:?}", message);
+                    info!("up (b): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
                             .nurse({
@@ -255,7 +261,7 @@ async fn it_merges_two_async_finite_listenable_sources() {
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -280,7 +286,8 @@ async fn it_merges_two_async_finite_listenable_sources() {
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L110-L168>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -290,6 +297,7 @@ async fn it_merges_two_async_finite_listenable_sources() {
 )]
 async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -318,7 +326,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message| {
-                        println!("up: {:?}", message);
+                        info!("up: {:?}", message);
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
                             let upwards_expected = &mut *upwards_expected.write().unwrap();
@@ -369,7 +377,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -404,7 +412,8 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L170-L250>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -414,6 +423,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
 )]
 async fn it_errors_when_one_of_the_sources_errors() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let upwards_expected_a: Vec<(MessagePredicate<_, _>, &str)> =
         vec![(|m| matches!(m, Message::Handshake(_)), "Message::Handshake")];
@@ -447,7 +457,7 @@ async fn it_errors_when_one_of_the_sources_errors() {
                 {
                     let source_a_ref = Arc::clone(&source_a_ref);
                     move |message| {
-                        println!("up (a): {:?}", message);
+                        info!("up (a): {:?}", message);
                         {
                             let upwards_expected_a = &mut *upwards_expected_a.write().unwrap();
                             let e = upwards_expected_a.pop_front().unwrap();
@@ -509,7 +519,7 @@ async fn it_errors_when_one_of_the_sources_errors() {
                 {
                     let source_b_ref = Arc::clone(&source_b_ref);
                     move |message| {
-                        println!("up (b): {:?}", message);
+                        info!("up (b): {:?}", message);
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
                             let upwards_expected_b = &mut *upwards_expected_b.write().unwrap();
@@ -560,7 +570,7 @@ async fn it_errors_when_one_of_the_sources_errors() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -593,7 +603,8 @@ async fn it_errors_when_one_of_the_sources_errors() {
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L252-L302>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -603,6 +614,7 @@ async fn it_errors_when_one_of_the_sources_errors() {
 )]
 async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -625,7 +637,7 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
                 let sink_greeted = Arc::clone(&sink_greeted);
                 let quick_source_ref = Arc::clone(&quick_source_ref);
                 move |message| {
-                    println!("up (quick): {:?}", message);
+                    info!("up (quick): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         assert!(
                             !sink_greeted.load(AtomicOrdering::Acquire),
@@ -662,7 +674,7 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
                 let nursery = nursery.clone();
                 let slow_source_ref = Arc::clone(&slow_source_ref);
                 move |message| {
-                    println!("up (slow): {:?}", message);
+                    info!("up (slow): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
                             .nurse({
@@ -698,7 +710,7 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
         let sink_greeted = Arc::clone(&sink_greeted);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -726,7 +738,8 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L304-L348>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -736,6 +749,7 @@ async fn it_greets_the_sink_as_soon_as_the_first_member_source_greets() {
 )]
 async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_conditions_part_1() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -756,7 +770,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
             {
                 let source_a_ref = Arc::clone(&source_a_ref);
                 move |message| {
-                    println!("up (a): {:?}", message);
+                    info!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let source_a = {
                             let source_a_ref = &mut *source_a_ref.write().unwrap();
@@ -785,7 +799,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
                 let nursery = nursery.clone();
                 let source_b_ref = Arc::clone(&source_b_ref);
                 move |message| {
-                    println!("up (b): {:?}", message);
+                    info!("up (b): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let source_b = {
                             let source_b_ref = &mut *source_b_ref.write().unwrap();
@@ -818,7 +832,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -843,7 +857,8 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L350-L394>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -853,6 +868,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
 )]
 async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_conditions_part_2() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -873,7 +889,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
             {
                 let source_a_ref = Arc::clone(&source_a_ref);
                 move |message| {
-                    println!("up (a): {:?}", message);
+                    info!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let source_a = {
                             let source_a_ref = &mut *source_a_ref.write().unwrap();
@@ -902,7 +918,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
                 let nursery = nursery.clone();
                 let source_b_ref = Arc::clone(&source_b_ref);
                 move |message| {
-                    println!("up (b): {:?}", message);
+                    info!("up (b): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let source_b = {
                             let source_b_ref = &mut *source_b_ref.write().unwrap();
@@ -935,7 +951,7 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -959,7 +975,8 @@ async fn it_merges_sync_listenable_sources_resilient_to_greet_terminate_race_con
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L396-L438>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -983,7 +1000,7 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_error_race_conditions_pa
             {
                 let source_a_ref = Arc::clone(&source_a_ref);
                 move |message| {
-                    println!("up (a): {:?}", message);
+                    info!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let source_a = {
                             let source_a_ref = &mut *source_a_ref.write().unwrap();
@@ -1010,7 +1027,7 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_error_race_conditions_pa
 
     let source_b = Arc::new(
         (move |message| {
-            println!("up (b): {:?}", message);
+            info!("up (b): {:?}", message);
             if let Message::Handshake(_sink) = message {
                 panic!("source_b should not get subscribed.");
             }
@@ -1020,7 +1037,7 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_error_race_conditions_pa
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -1044,7 +1061,8 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_error_race_conditions_pa
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L440-L490>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -1067,7 +1085,7 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_disposal_race_conditions
             {
                 let source_a_ref = Arc::clone(&source_a_ref);
                 move |message| {
-                    println!("up (a): {:?}", message);
+                    info!("up (a): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         let source_a = {
                             let source_a_ref = &mut *source_a_ref.write().unwrap();
@@ -1090,7 +1108,7 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_disposal_race_conditions
 
     let source_b = Arc::new(
         (move |message| {
-            println!("up (b): {:?}", message);
+            info!("up (b): {:?}", message);
             if let Message::Handshake(_sink) = message {
                 panic!("source_b should not get subscribed.");
             }
@@ -1103,7 +1121,7 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_disposal_race_conditions
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -1135,7 +1153,8 @@ fn it_merges_sync_listenable_sources_resilient_to_greet_disposal_race_conditions
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L492-L516>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -1179,7 +1198,8 @@ fn all_sources_get_requests_from_sinks() {
 }
 
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/test.js#L518-L538>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test

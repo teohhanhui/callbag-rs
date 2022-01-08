@@ -6,6 +6,7 @@ use std::{
         Arc, RwLock,
     },
 };
+use tracing::info;
 
 use crate::common::MessagePredicate;
 
@@ -16,6 +17,7 @@ use {
     async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
     std::time::Duration,
+    tracing_futures::Instrument,
 };
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -35,7 +37,8 @@ pub mod common;
 wasm_bindgen_test_configure!(run_in_browser);
 
 /// See <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L4-L50>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -52,7 +55,7 @@ fn it_iterates_a_finite_pullable_source() {
         Arc::new(RwLock::new(downwards_expected.into()));
 
     let sink = for_each(move |x| {
-        println!("down: {}", x);
+        info!("down: {}", x);
         assert_eq!(
             x,
             {
@@ -71,7 +74,7 @@ fn it_iterates_a_finite_pullable_source() {
             {
                 let source_ref = Arc::clone(&source_ref);
                 move |message| {
-                    println!("up: {:?}", message);
+                    info!("up: {:?}", message);
                     if let Message::Handshake(sink) = message {
                         sink_ref.store(Some(sink));
                         let sink_ref = sink_ref.load();
@@ -132,7 +135,8 @@ fn it_iterates_a_finite_pullable_source() {
 
 /// See <https://github.com/staltz/callbag-for-each/blob/a7550690afca2a27324ea5634a32a313f826d61a/test.js#L52-L109>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -142,6 +146,7 @@ fn it_iterates_a_finite_pullable_source() {
 )]
 async fn it_observes_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -164,7 +169,7 @@ async fn it_observes_an_async_finite_listenable_source() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message| {
-                        println!("up: {:?}", message);
+                        info!("up: {:?}", message);
                         {
                             let upwards_expected = &mut *upwards_expected.write().unwrap();
                             let e = upwards_expected.pop_front().unwrap();
@@ -223,7 +228,7 @@ async fn it_observes_an_async_finite_listenable_source() {
 
     let source = make_source();
     for_each(move |x| {
-        println!("down: {}", x);
+        info!("down: {}", x);
         let downwards_expected = &mut *downwards_expected.write().unwrap();
         let e = downwards_expected.pop_front().unwrap();
         assert_eq!(x, e, "downwards data is expected: {}", e);
