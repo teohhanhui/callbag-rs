@@ -12,6 +12,7 @@ env:
   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -Dwarnings # https://github.com/rust-lang/cargo/issues/4423#issuecomment-404188918
   CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -Dwarnings # https://github.com/rust-lang/cargo/issues/4423#issuecomment-404188918
   RUST_BACKTRACE: short
+  RUST_LOG: info
   RUSTFLAGS: -Dwarnings
 
 jobs:
@@ -94,6 +95,7 @@ jobs:
         with:
           command: test
           toolchain: ${{ matrix.rust }}
+          args: -- --nocapture
       - name: Install wasm-pack
         uses: ./.github/actions/install-wasm-pack
       - name: Run tests (wasm32-unknown-unknown) (Node.js)
@@ -110,7 +112,7 @@ jobs:
         with:
           command: wasi
           toolchain: ${{ matrix.rust }}
-          args: test
+          args: test -- --nocapture
       - name: Run doctests
         uses: ./.github/actions/cargo
         with:

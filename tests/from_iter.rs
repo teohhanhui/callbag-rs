@@ -6,6 +6,7 @@ use std::{
         Arc, RwLock,
     },
 };
+use tracing::info;
 
 use crate::common::MessagePredicate;
 
@@ -28,7 +29,8 @@ pub mod common;
 wasm_bindgen_test_configure!(run_in_browser);
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L4-L34>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -52,7 +54,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -80,7 +82,8 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
 }
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L36-L66>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -104,7 +107,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -132,7 +135,8 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
 }
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -173,7 +177,7 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
         {
             let iterated = Arc::clone(&iterated);
             move |message| {
-                // println!("down: {:?}", message); // don't blow up stdout
+                // info!("down: {:?}", message); // don't blow up stdout
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                     let talkback = talkback.load();
@@ -202,7 +206,8 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
 }
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L99-L129>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -223,7 +228,7 @@ fn it_stops_sending_after_source_completion() {
         {
             let actual = Arc::clone(&actual);
             move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();

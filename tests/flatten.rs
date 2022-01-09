@@ -6,6 +6,7 @@ use std::{
         Arc, RwLock,
     },
 };
+use tracing::info;
 
 use crate::common::MessagePredicate;
 
@@ -23,6 +24,7 @@ use {
         sync::{atomic::AtomicBool, Condvar, Mutex},
         time::Duration,
     },
+    tracing_futures::Instrument,
 };
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -43,7 +45,8 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L6-L70>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -53,6 +56,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 )]
 async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -77,7 +81,7 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
                 let nursery = nursery.clone();
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
-                    println!("up (outer): {:?}", message);
+                    info!("up (outer): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
                             .nurse({
@@ -133,7 +137,7 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
         {
             let nursery = nursery.clone();
             move |message| {
-                println!("up (inner): {:?}", message);
+                info!("up (inner): {:?}", message);
                 if let Message::Handshake(sink) = message {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
@@ -162,7 +166,7 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
                         .unwrap();
                     sink(Message::Handshake(Arc::new(
                         (move |message| {
-                            println!("up (inner): {:?}", message);
+                            info!("up (inner): {:?}", message);
                             let interval_cleared = Arc::clone(&interval_cleared);
                             if let Message::Error(_) | Message::Terminate = message {
                                 interval_cleared.store(true, AtomicOrdering::Release);
@@ -178,7 +182,7 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -204,7 +208,8 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
 }
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L72-L179>
-#[test]
+#[tracing::instrument]
+#[test_log::test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
@@ -254,7 +259,7 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
             {
                 let outer_source_ref = Arc::clone(&outer_source_ref);
                 move |message| {
-                    println!("up (outer): {:?}", message);
+                    info!("up (outer): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         outer_sink.store(Some(sink));
                         let outer_sink = outer_sink.load();
@@ -316,7 +321,7 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
             {
                 let inner_source_ref = Arc::clone(&inner_source_ref);
                 move |message| {
-                    println!("up (inner): {:?}", message);
+                    info!("up (inner): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         inner_sink.store(Some(sink));
                         let inner_sink = inner_sink.load();
@@ -381,7 +386,7 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
         {
             let talkback = ArcSwapOption::from(None);
             move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -415,7 +420,8 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L247-L318>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -425,6 +431,7 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
 )]
 async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let inner_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -454,7 +461,7 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
                 let nursery = nursery.clone();
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
-                    println!("up (outer): {:?}", message);
+                    info!("up (outer): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         nursery
                             .nurse({
@@ -514,7 +521,7 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
         {
             let nursery = nursery.clone();
             move |message| {
-                println!("up (inner): {:?}", message);
+                info!("up (inner): {:?}", message);
                 {
                     let inner_expected_types = &mut *inner_expected_types.write().unwrap();
                     let et = inner_expected_types.pop_front().unwrap();
@@ -549,7 +556,7 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
                         .unwrap();
                     sink(Message::Handshake(Arc::new(
                         (move |message| {
-                            println!("up (inner): {:?}", message);
+                            info!("up (inner): {:?}", message);
                             let interval_cleared = Arc::clone(&interval_cleared);
                             if let Message::Error(_) | Message::Terminate = message {
                                 interval_cleared.store(true, AtomicOrdering::Release);
@@ -565,7 +572,7 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -592,7 +599,8 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L320-L391>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -602,6 +610,7 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
 )]
 async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -632,7 +641,7 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
                 let nursery = nursery.clone();
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
-                    println!("up (outer): {:?}", message);
+                    info!("up (outer): {:?}", message);
                     {
                         let outer_expected_types = &mut *outer_expected_types.write().unwrap();
                         let et = outer_expected_types.pop_front().unwrap();
@@ -683,7 +692,7 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
         {
             let nursery = nursery.clone();
             move |message| {
-                println!("up (inner): {:?}", message);
+                info!("up (inner): {:?}", message);
                 if let Message::Handshake(sink) = message {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
@@ -716,7 +725,7 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
                         .unwrap();
                     sink(Message::Handshake(Arc::new(
                         (move |message| {
-                            println!("up (inner): {:?}", message);
+                            info!("up (inner): {:?}", message);
                             let interval_cleared = Arc::clone(&interval_cleared);
                             if let Message::Error(_) | Message::Terminate = message {
                                 interval_cleared.store(true, AtomicOrdering::Release);
@@ -732,7 +741,7 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             {
                 let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                 let et = downwards_expected_types.pop_front().unwrap();
@@ -759,7 +768,8 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L393-L433>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -770,6 +780,7 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for_inner_completion()
 {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     #[allow(clippy::mutex_atomic)]
     let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
@@ -789,7 +800,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                 let outer_completed_pair = Arc::clone(&outer_completed_pair);
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
-                    println!("up (outer): {:?}", message);
+                    info!("up (outer): {:?}", message);
                     {
                         let outer_expected_types = &mut *outer_expected_types.write().unwrap();
                         let et = outer_expected_types.pop_front().unwrap();
@@ -828,7 +839,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
         {
             let nursery = nursery.clone();
             move |message| {
-                println!("down: {:?}", message);
+                info!("down: {:?}", message);
                 {
                     let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
                     let et = downwards_expected_types.pop_front().unwrap();
@@ -870,7 +881,8 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L435-L480>
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-#[async_std::test]
+#[tracing::instrument]
+#[test_log::test(async_std::test)]
 #[cfg_attr(
     all(
         all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -880,6 +892,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
 )]
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_errors() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
+    let nursery = nursery.in_current_span();
 
     #[allow(clippy::mutex_atomic)]
     let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
@@ -901,7 +914,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                 let outer_completed_pair = Arc::clone(&outer_completed_pair);
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
-                    println!("up (outer): {:?}", message);
+                    info!("up (outer): {:?}", message);
                     {
                         let outer_expected_types = &mut *outer_expected_types.write().unwrap();
                         let et = outer_expected_types.pop_front().unwrap();
@@ -943,7 +956,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                 let nursery = nursery.clone();
                 let source_inner_ref = Arc::clone(&source_inner_ref);
                 move |message| {
-                    println!("up (inner): {:?}", message);
+                    info!("up (inner): {:?}", message);
                     if let Message::Handshake(sink) = message {
                         {
                             let source_inner = {
@@ -985,7 +998,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
 
     let sink = Arc::new(
         (move |message| {
-            println!("down: {:?}", message);
+            info!("down: {:?}", message);
             let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
             let et = downwards_expected_types.pop_front().unwrap();
             assert!(et.0(&message), "downwards type is expected: {}", et.1);
