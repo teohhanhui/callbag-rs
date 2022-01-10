@@ -17,28 +17,24 @@ use crate::{Message, Source};
 /// On a listenable source:
 ///
 /// ```
-/// use arc_swap::ArcSwap;
 /// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
+/// use crossbeam_queue::SegQueue;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{for_each, interval, skip};
 ///
 /// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = skip(3)(interval(Duration::from_millis(1_000), nursery.clone()));
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec);
+///     let actual = Arc::clone(&actual);
 ///     move |x| {
 ///         println!("{}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x);
-///             vec
-///         });
+///         actual.push(x);
 ///     }
 /// })(source);
 ///
@@ -46,13 +42,24 @@ use crate::{Message, Source};
 /// drop(nursery);
 /// async_std::task::block_on(nursery_out);
 ///
-/// assert_eq!(vec.load()[..], [3, 4, 5, 6]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
+///     [3, 4, 5, 6]
+/// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// On a pullable source:
 ///
 /// ```
-/// use arc_swap::ArcSwap;
+/// use crossbeam_queue::SegQueue;
 /// use std::sync::Arc;
 ///
 /// use callbag::{for_each, from_iter, skip};
@@ -83,23 +90,30 @@ use crate::{Message, Source};
 ///     }
 /// }
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = skip(4)(from_iter(Range::new(10, 20)));
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec);
+///     let actual = Arc::clone(&actual);
 ///     move |x| {
 ///         println!("{}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x);
-///             vec
-///         });
+///         actual.push(x);
 ///     }
 /// })(source);
 ///
-/// assert_eq!(vec.load()[..], [14, 15, 16, 17, 18, 19, 20]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
+///     [14, 15, 16, 17, 18, 19, 20]
+/// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn skip<T: 'static, S>(max: usize) -> Box<dyn Fn(S) -> Source<T>>
 where

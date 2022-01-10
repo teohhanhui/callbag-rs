@@ -95,7 +95,7 @@ jobs:
         with:
           command: test
           toolchain: ${{ matrix.rust }}
-          args: -- --nocapture
+          args: --no-fail-fast -- --nocapture
       - name: Install wasm-pack
         uses: ./.github/actions/install-wasm-pack
       - name: Run tests (wasm32-unknown-unknown) (Node.js)
@@ -112,7 +112,7 @@ jobs:
         with:
           command: wasi
           toolchain: ${{ matrix.rust }}
-          args: test -- --nocapture
+          args: test --no-fail-fast -- --nocapture
       - name: Run doctests
         uses: ./.github/actions/cargo
         with:

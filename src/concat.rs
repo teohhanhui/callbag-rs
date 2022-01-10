@@ -18,28 +18,35 @@ use crate::{Message, Source};
 /// # Examples
 ///
 /// ```
-/// use arc_swap::ArcSwap;
+/// use crossbeam_queue::SegQueue;
 /// use std::sync::Arc;
 ///
 /// use callbag::{concat, for_each, from_iter};
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = concat!(from_iter(["10", "20", "30"]), from_iter(["a", "b"]));
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec);
+///     let actual = Arc::clone(&actual);
 ///     move |x| {
 ///         println!("{}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x);
-///             vec
-///         });
+///         actual.push(x);
 ///     }
 /// })(source);
 ///
-/// assert_eq!(vec.load()[..], ["10", "20", "30", "a", "b"]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
+///     ["10", "20", "30", "a", "b"]
+/// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[macro_export]
 macro_rules! concat {

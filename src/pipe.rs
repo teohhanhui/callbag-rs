@@ -12,16 +12,16 @@
 /// Create a source with `pipe!`, then pass it to a [`for_each`]:
 ///
 /// ```no_run
-/// use arc_swap::ArcSwap;
 /// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
+/// use crossbeam_queue::SegQueue;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{combine, for_each, interval, map, pipe, take};
 ///
 /// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = pipe!(
 ///     combine!(
@@ -33,14 +33,10 @@
 /// );
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec);
+///     let actual = Arc::clone(&actual);
 ///     move |x: String| {
 ///         println!("{:?}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x.clone());
-///             vec
-///         });
+///         actual.push(x.clone());
 ///     }
 /// })(source);
 ///
@@ -49,7 +45,13 @@
 /// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(
-///     vec.load()[..],
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
 ///     [
 ///         "X2,Y0",
 ///         "X3,Y0",
@@ -63,21 +65,23 @@
 ///         "X9,Y2",
 ///     ]
 /// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// Or use `pipe!` to go all the way from source to sink:
 ///
 /// ```no_run
-/// use arc_swap::ArcSwap;
 /// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
+/// use crossbeam_queue::SegQueue;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{combine, for_each, interval, map, pipe, take};
 ///
 /// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = pipe!(
 ///     combine!(
@@ -87,14 +91,10 @@
 ///     map(|(x, y)| format!("X{},Y{}", x, y)),
 ///     take(10),
 ///     for_each({
-///         let vec = Arc::clone(&vec);
+///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
 ///             println!("{:?}", x);
-///             vec.rcu(move |vec| {
-///                 let mut vec = (**vec).clone();
-///                 vec.push(x.clone());
-///                 vec
-///             });
+///             actual.push(x.clone());
 ///         }
 ///     }),
 /// );
@@ -104,7 +104,13 @@
 /// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(
-///     vec.load()[..],
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
 ///     [
 ///         "X2,Y0",
 ///         "X3,Y0",
@@ -118,6 +124,8 @@
 ///         "X9,Y2",
 ///     ]
 /// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// # Nesting
@@ -126,16 +134,16 @@
 /// `|s| pipe!(s, ...`:
 ///
 /// ```no_run
-/// use arc_swap::ArcSwap;
 /// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
+/// use crossbeam_queue::SegQueue;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{combine, for_each, interval, map, pipe, take};
 ///
 /// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = pipe!(
 ///     combine!(
@@ -148,14 +156,10 @@
 ///         take(10),
 ///     ),
 ///     for_each({
-///         let vec = Arc::clone(&vec);
+///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
 ///             println!("{:?}", x);
-///             vec.rcu(move |vec| {
-///                 let mut vec = (**vec).clone();
-///                 vec.push(x.clone());
-///                 vec
-///             });
+///             actual.push(x.clone());
 ///         }
 ///     }),
 /// );
@@ -165,7 +169,13 @@
 /// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(
-///     vec.load()[..],
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
 ///     [
 ///         "X2,Y0",
 ///         "X3,Y0",
@@ -179,21 +189,23 @@
 ///         "X9,Y2",
 ///     ]
 /// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// This means you can use `pipe!` to create a new operator:
 ///
 /// ```no_run
-/// use arc_swap::ArcSwap;
 /// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
+/// use crossbeam_queue::SegQueue;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{combine, for_each, interval, map, pipe, take};
 ///
 /// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let map_then_take = |f, amount| {
 ///     move |s| pipe!(s, map(f), take(amount))
@@ -209,14 +221,10 @@
 ///         map_then_take(|(x, y)| format!("X{},Y{}", x, y), 10),
 ///     ),
 ///     for_each({
-///         let vec = Arc::clone(&vec);
+///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
 ///             println!("{:?}", x);
-///             vec.rcu(move |vec| {
-///                 let mut vec = (**vec).clone();
-///                 vec.push(x.clone());
-///                 vec
-///             });
+///             actual.push(x.clone());
 ///         }
 ///     }),
 /// );
@@ -226,7 +234,13 @@
 /// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(
-///     vec.load()[..],
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
 ///     [
 ///         "X2,Y0",
 ///         "X3,Y0",
@@ -240,6 +254,8 @@
 ///         "X9,Y2",
 ///     ]
 /// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// [`for_each`]: crate::for_each()
