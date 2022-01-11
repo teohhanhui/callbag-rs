@@ -17,7 +17,6 @@ env:
 
 jobs:
   clippy:
-    name: Clippy (${{ matrix.os }}) (Rust ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -65,7 +64,6 @@ jobs:
           args: --tests
 
   test:
-    name: Test (${{ matrix.os }}) (Rust ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -121,7 +119,6 @@ jobs:
           args: --doc
 
   rustdoc:
-    name: Rustdoc (Rust ${{ matrix.rust }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -142,7 +139,6 @@ jobs:
           args: --no-deps
 
   rustfmt:
-    name: Rustfmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
