@@ -1,10 +1,8 @@
 use arc_swap::ArcSwapOption;
-use std::{
-    collections::VecDeque,
-    sync::{
-        atomic::{AtomicUsize, Ordering as AtomicOrdering},
-        Arc, RwLock,
-    },
+use crossbeam_queue::SegQueue;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering as AtomicOrdering},
+    Arc,
 };
 use tracing::info;
 
@@ -16,7 +14,10 @@ use callbag::{take, Message, Source};
 use {
     async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
-    std::{sync::atomic::AtomicBool, time::Duration},
+    std::{
+        sync::{atomic::AtomicBool, RwLock},
+        time::Duration,
+    },
     tracing_futures::Instrument,
 };
 
@@ -58,7 +59,11 @@ async fn it_takes_from_a_pullable_source() {
         (|m| matches!(m, Message::Pull), "Message::Pull"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let upwards_expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(upwards_expected.into()));
+    let upwards_expected = {
+        let q = SegQueue::new();
+        upwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -66,11 +71,19 @@ async fn it_takes_from_a_pullable_source() {
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected_types = {
+        let q = SegQueue::new();
+        downwards_expected_types
+            .into_iter()
+            .for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = [10, 20, 30];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let make_source = {
         let nursery = nursery.clone();
@@ -84,8 +97,7 @@ async fn it_takes_from_a_pullable_source() {
                     move |message| {
                         info!("up: {:?}", message);
                         {
-                            let upwards_expected = &mut *upwards_expected.write().unwrap();
-                            let e = upwards_expected.pop_front().unwrap();
+                            let e = upwards_expected.pop().unwrap();
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
 
@@ -198,8 +210,7 @@ async fn it_takes_from_a_pullable_source() {
             (move |message| {
                 info!("down: {:?}", message);
                 {
-                    let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
-                    let et = downwards_expected_types.pop_front().unwrap();
+                    let et = downwards_expected_types.pop().unwrap();
                     assert!(et.0(&message), "downwards type is expected: {}", et.1);
                 }
                 if let Message::Handshake(source) = message {
@@ -209,8 +220,7 @@ async fn it_takes_from_a_pullable_source() {
                     talkback(Message::Pull);
                 } else if let Message::Data(data) = message {
                     {
-                        let downwards_expected = &mut *downwards_expected.write().unwrap();
-                        let e = downwards_expected.pop_front().unwrap();
+                        let e = downwards_expected.pop().unwrap();
                         assert_eq!(data, e, "downwards data is expected: {}", e);
                     }
                     let talkback = talkback.load();
@@ -251,7 +261,11 @@ async fn it_takes_an_async_listenable_source() {
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let upwards_expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(upwards_expected.into()));
+    let upwards_expected = {
+        let q = SegQueue::new();
+        upwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -259,11 +273,19 @@ async fn it_takes_an_async_listenable_source() {
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected_types = {
+        let q = SegQueue::new();
+        downwards_expected_types
+            .into_iter()
+            .for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = [10, 20, 30];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let make_source = {
         let nursery = nursery.clone();
@@ -278,8 +300,7 @@ async fn it_takes_an_async_listenable_source() {
                         info!("up: {:?}", message);
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
-                            let upwards_expected = &mut *upwards_expected.write().unwrap();
-                            let e = upwards_expected.pop_front().unwrap();
+                            let e = upwards_expected.pop().unwrap();
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
@@ -326,13 +347,11 @@ async fn it_takes_an_async_listenable_source() {
         (move |message| {
             info!("down: {:?}", message);
             {
-                let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
-                let et = downwards_expected_types.pop_front().unwrap();
+                let et = downwards_expected_types.pop().unwrap();
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
             if let Message::Data(data) = message {
-                let downwards_expected = &mut *downwards_expected.write().unwrap();
-                let e = downwards_expected.pop_front().unwrap();
+                let e = downwards_expected.pop().unwrap();
                 assert_eq!(data, e, "downwards data is expected: {}", e);
             }
         })
@@ -367,18 +386,30 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let upwards_expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(upwards_expected.into()));
+    let upwards_expected = {
+        let q = SegQueue::new();
+        upwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
     ];
-    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected_types = {
+        let q = SegQueue::new();
+        downwards_expected_types
+            .into_iter()
+            .for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = [10, 20, 30];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let make_source = {
         let nursery = nursery.clone();
@@ -393,8 +424,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                         info!("up: {:?}", message);
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
-                            let upwards_expected = &mut *upwards_expected.write().unwrap();
-                            let e = upwards_expected.pop_front().unwrap();
+                            let e = upwards_expected.pop().unwrap();
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
@@ -443,18 +473,15 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
             (move |message| {
                 info!("down: {:?}", message);
                 {
-                    let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
-                    let et = downwards_expected_types.pop_front().unwrap();
+                    let et = downwards_expected_types.pop().unwrap();
                     assert!(et.0(&message), "downwards type is expected: {}", et.1);
                 }
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                 } else if let Message::Data(data) = message {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
+                    let e = downwards_expected.pop().unwrap();
                     assert_eq!(data, e, "downwards data is expected: {}", e);
                 }
-                let downwards_expected = &*downwards_expected.read().unwrap();
                 if downwards_expected.is_empty() {
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
@@ -491,7 +518,11 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
         (|m| matches!(m, Message::Pull), "Message::Pull"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let upwards_expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(upwards_expected.into()));
+    let upwards_expected = {
+        let q = SegQueue::new();
+        upwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
@@ -499,11 +530,19 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected_types = {
+        let q = SegQueue::new();
+        downwards_expected_types
+            .into_iter()
+            .for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = [7, 8, 9];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let range_infinite = {
         let terminations = Arc::clone(&terminations);
@@ -521,9 +560,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
                                 move |message| {
                                     info!("up: {:?}", message);
                                     {
-                                        let upwards_expected =
-                                            &mut *upwards_expected.write().unwrap();
-                                        let e = upwards_expected.pop_front().unwrap();
+                                        let e = upwards_expected.pop().unwrap();
                                         assert!(e.0(&message), "upwards type is expected: {}", e.1);
                                     }
                                     if let Message::Pull = message {
@@ -549,8 +586,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
             (move |message| {
                 info!("down: {:?}", message);
                 {
-                    let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
-                    let et = downwards_expected_types.pop_front().unwrap();
+                    let et = downwards_expected_types.pop().unwrap();
                     assert!(et.0(&message), "downwards type is expected: {}", et.1);
                 }
                 if let Message::Handshake(source) = message {
@@ -560,8 +596,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
                     talkback(Message::Pull);
                 } else if let Message::Data(data) = message {
                     {
-                        let downwards_expected = &mut *downwards_expected.write().unwrap();
-                        let e = downwards_expected.pop_front().unwrap();
+                        let e = downwards_expected.pop().unwrap();
                         assert_eq!(data, e, "downwards data is expected: {}", e);
                     }
                     let talkback = talkback.load();

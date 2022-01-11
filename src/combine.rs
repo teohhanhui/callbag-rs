@@ -18,16 +18,16 @@ use crate::{Message, Source};
 /// # Examples
 ///
 /// ```no_run
-/// use arc_swap::ArcSwap;
 /// use async_executors::TimerExt;
 /// use async_nursery::Nursery;
+/// use crossbeam_queue::SegQueue;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{combine, for_each, interval};
 ///
 /// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = combine!(
 ///     interval(Duration::from_millis(100), nursery.clone()),
@@ -35,14 +35,10 @@ use crate::{Message, Source};
 /// );
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec);
+///     let actual = Arc::clone(&actual);
 ///     move |x| {
 ///         println!("{:?}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x);
-///             vec
-///         });
+///         actual.push(x);
 ///     }
 /// })(source);
 ///
@@ -51,7 +47,13 @@ use crate::{Message, Source};
 /// async_std::task::block_on(nursery_out);
 ///
 /// assert_eq!(
-///     vec.load()[..],
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
 ///     [
 ///         (2, 0),
 ///         (3, 0),
@@ -63,6 +65,8 @@ use crate::{Message, Source};
 ///         (8, 1),
 ///     ]
 /// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// # Implementation notes

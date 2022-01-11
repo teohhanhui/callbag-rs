@@ -1,10 +1,8 @@
 use arc_swap::ArcSwapOption;
-use std::{
-    collections::VecDeque,
-    sync::{
-        atomic::{AtomicUsize, Ordering as AtomicOrdering},
-        Arc, RwLock,
-    },
+use crossbeam_queue::SegQueue;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering as AtomicOrdering},
+    Arc, RwLock,
 };
 use tracing::info;
 
@@ -49,19 +47,23 @@ fn it_iterates_a_finite_pullable_source() {
         (|m| matches!(m, Message::Pull), "Message::Pull"),
         (|m| matches!(m, Message::Pull), "Message::Pull"),
     ];
-    let upwards_expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(upwards_expected.into()));
+    let upwards_expected = {
+        let q = SegQueue::new();
+        upwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = ["a", "b", "c"];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let sink = for_each(move |x| {
         info!("down: {}", x);
         assert_eq!(
             x,
-            {
-                let downwards_expected = &mut *downwards_expected.write().unwrap();
-                downwards_expected.pop_front().unwrap()
-            },
+            downwards_expected.pop().unwrap(),
             "downwards data is expected"
         );
     });
@@ -92,10 +94,9 @@ fn it_iterates_a_finite_pullable_source() {
                         sink_ref(Message::Terminate);
                         return;
                     }
+                    assert!(!upwards_expected.is_empty(), "source can be pulled");
                     {
-                        let upwards_expected = &mut *upwards_expected.write().unwrap();
-                        assert!(!upwards_expected.is_empty(), "source can be pulled");
-                        let expected = upwards_expected.pop_front().unwrap();
+                        let expected = upwards_expected.pop().unwrap();
                         assert!(expected.0(&message), "upwards type is expected");
                     }
                     if sent.load(AtomicOrdering::Acquire) == 0 {
@@ -155,10 +156,17 @@ async fn it_observes_an_async_finite_listenable_source() {
         (|m| matches!(m, Message::Pull), "Message::Pull"),
         (|m| matches!(m, Message::Pull), "Message::Pull"),
     ];
-    let upwards_expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(upwards_expected.into()));
+    let upwards_expected = {
+        let q = SegQueue::new();
+        upwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = [10, 20, 30];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let make_source = {
         let nursery = nursery.clone();
@@ -171,8 +179,7 @@ async fn it_observes_an_async_finite_listenable_source() {
                     move |message| {
                         info!("up: {:?}", message);
                         {
-                            let upwards_expected = &mut *upwards_expected.write().unwrap();
-                            let e = upwards_expected.pop_front().unwrap();
+                            let e = upwards_expected.pop().unwrap();
                             assert!(e.0(&message), "upwards type is expected: {}", e.1);
                         }
                         if let Message::Handshake(sink) = message {
@@ -229,8 +236,7 @@ async fn it_observes_an_async_finite_listenable_source() {
     let source = make_source();
     for_each(move |x| {
         info!("down: {}", x);
-        let downwards_expected = &mut *downwards_expected.write().unwrap();
-        let e = downwards_expected.pop_front().unwrap();
+        let e = downwards_expected.pop().unwrap();
         assert_eq!(x, e, "downwards data is expected: {}", e);
     })(source);
 

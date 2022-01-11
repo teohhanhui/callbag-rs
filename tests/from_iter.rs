@@ -1,10 +1,8 @@
 use arc_swap::ArcSwapOption;
-use std::{
-    collections::VecDeque,
-    sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
-        Arc, RwLock,
-    },
+use crossbeam_queue::SegQueue;
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
+    Arc,
 };
 use tracing::info;
 
@@ -45,19 +43,26 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected_types = {
+        let q = SegQueue::new();
+        downwards_expected_types
+            .into_iter()
+            .for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = [10, 20, 30];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
         (move |message| {
             info!("down: {:?}", message);
             {
-                let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
-                let et = downwards_expected_types.pop_front().unwrap();
+                let et = downwards_expected_types.pop().unwrap();
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
 
@@ -68,8 +73,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
                 talkback(Message::Pull);
             } else if let Message::Data(data) = message {
                 {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
+                    let e = downwards_expected.pop().unwrap();
                     assert_eq!(data, e, "downwards data is expected: {}", e);
                 }
                 let talkback = talkback.load();
@@ -98,19 +102,26 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
         (|m| matches!(m, Message::Terminate), "Message::Terminate"),
     ];
-    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected_types = {
+        let q = SegQueue::new();
+        downwards_expected_types
+            .into_iter()
+            .for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     let downwards_expected = [(0, "a"), (1, "b"), (2, "c")];
-    let downwards_expected: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected.into()));
+    let downwards_expected = {
+        let q = SegQueue::new();
+        downwards_expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
         (move |message| {
             info!("down: {:?}", message);
             {
-                let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
-                let et = downwards_expected_types.pop_front().unwrap();
+                let et = downwards_expected_types.pop().unwrap();
                 assert!(et.0(&message), "downwards type is expected: {}", et.1);
             }
 
@@ -121,8 +132,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
                 talkback(Message::Pull);
             } else if let Message::Data(data) = message {
                 {
-                    let downwards_expected = &mut *downwards_expected.write().unwrap();
-                    let e = downwards_expected.pop_front().unwrap();
+                    let e = downwards_expected.pop().unwrap();
                     assert_eq!(data, e, "downwards data is expected: {:?}", e);
                 }
                 let talkback = talkback.load();
@@ -215,13 +225,18 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
 fn it_stops_sending_after_source_completion() {
     let source = from_iter([10, 20, 30]);
 
-    let actual = Arc::new(RwLock::new(vec![]));
+    let actual = Arc::new(SegQueue::new());
     let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
         (|m| matches!(m, Message::Data(_)), "Message::Data"),
     ];
-    let downwards_expected_types: Arc<RwLock<VecDeque<_>>> =
-        Arc::new(RwLock::new(downwards_expected_types.into()));
+    let downwards_expected_types = {
+        let q = SegQueue::new();
+        downwards_expected_types
+            .into_iter()
+            .for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
@@ -230,8 +245,7 @@ fn it_stops_sending_after_source_completion() {
             move |message| {
                 info!("down: {:?}", message);
                 {
-                    let downwards_expected_types = &mut *downwards_expected_types.write().unwrap();
-                    let et = downwards_expected_types.pop_front().unwrap();
+                    let et = downwards_expected_types.pop().unwrap();
                     assert!(et.0(&message), "downwards type is expected: {}", et.1);
                 }
 
@@ -241,10 +255,7 @@ fn it_stops_sending_after_source_completion() {
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Pull);
                 } else if let Message::Data(data) = message {
-                    {
-                        let actual = &mut *actual.write().unwrap();
-                        actual.push(data);
-                    }
+                    actual.push(data);
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
                     talkback(Message::Terminate);
@@ -256,5 +267,14 @@ fn it_stops_sending_after_source_completion() {
         .into(),
     )));
 
-    assert_eq!((&*actual.read().unwrap())[..], [10]);
+    assert_eq!(
+        &{
+            let mut v = vec![];
+            for _i in 0..actual.len() {
+                v.push(actual.pop().unwrap());
+            }
+            v
+        }[..],
+        [10]
+    );
 }

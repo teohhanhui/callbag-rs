@@ -11,28 +11,35 @@ use crate::{Message, Source};
 /// # Examples
 ///
 /// ```
-/// use arc_swap::ArcSwap;
+/// use crossbeam_queue::SegQueue;
 /// use std::sync::Arc;
 ///
 /// use callbag::{for_each, from_iter, map};
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = map(|x| (x as f64 * 0.1) as usize)(from_iter([10, 20, 30, 40]));
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec);
+///     let actual = Arc::clone(&actual);
 ///     move |x| {
 ///         println!("{}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x);
-///             vec
-///         });
+///         actual.push(x);
 ///     }
 /// })(source);
 ///
-/// assert_eq!(vec.load()[..], [1, 2, 3, 4]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
+///     [1, 2, 3, 4]
+/// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn map<I: 'static, O: 'static, F: 'static, S>(f: F) -> Box<dyn Fn(S) -> Source<O>>
 where

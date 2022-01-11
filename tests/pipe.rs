@@ -1,7 +1,5 @@
-use std::{
-    collections::VecDeque,
-    sync::{Arc, RwLock},
-};
+use crossbeam_queue::SegQueue;
+use std::sync::Arc;
 
 use callbag::{filter, for_each, from_iter, map, pipe};
 
@@ -67,16 +65,17 @@ fn it_calls_first_order_functions_in_a_nested_pipe() {
 )]
 fn it_can_be_used_with_common_callbag_utilities() {
     let expected = [1, 3];
-    let expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(expected.into()));
+    let expected = {
+        let q = SegQueue::new();
+        expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     pipe!(
         from_iter([10, 20, 30, 40]),
         map(|x| x / 10),
         filter(|x| x % 2 != 0),
         for_each(move |x| {
-            assert_eq!(x, {
-                let expected = &mut *expected.write().unwrap();
-                expected.pop_front().unwrap()
-            });
+            assert_eq!(x, expected.pop().unwrap());
         }),
     );
 }
@@ -90,15 +89,16 @@ fn it_can_be_used_with_common_callbag_utilities() {
 )]
 fn it_can_be_nested_with_callbag_utilities() {
     let expected = [1, 3];
-    let expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(expected.into()));
+    let expected = {
+        let q = SegQueue::new();
+        expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
     pipe!(
         from_iter([10, 20, 30, 40]),
         |s| pipe!(s, map(|x| x / 10), filter(|x| x % 2 != 0)),
         for_each(move |x| {
-            assert_eq!(x, {
-                let expected = &mut *expected.write().unwrap();
-                expected.pop_front().unwrap()
-            });
+            assert_eq!(x, expected.pop().unwrap());
         }),
     );
 }

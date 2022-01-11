@@ -21,12 +21,12 @@ use crate::{Message, Source};
 /// Loop over two iterables (such as arrays) and combine their values together:
 ///
 /// ```
-/// use arc_swap::ArcSwap;
+/// use crossbeam_queue::SegQueue;
 /// use std::sync::Arc;
 ///
 /// use callbag::{flatten, for_each, from_iter, map, pipe};
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = pipe!(
 ///     from_iter("hi".chars()),
@@ -36,19 +36,26 @@ use crate::{Message, Source};
 ///     )),
 ///     flatten,
 ///     for_each({
-///         let vec = Arc::clone(&vec);
+///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
 ///             println!("{}", x);
-///             vec.rcu(move |vec| {
-///                 let mut vec = (**vec).clone();
-///                 vec.push(x.clone());
-///                 vec
-///             });
+///             actual.push(x.clone());
 ///         }
 ///     }),
 /// );
 ///
-/// assert_eq!(vec.load()[..], ["h10", "h20", "h30", "i10", "i20", "i30"]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
+///     ["h10", "h20", "h30", "i10", "i20", "i30"]
+/// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// [`map`]: crate::map()

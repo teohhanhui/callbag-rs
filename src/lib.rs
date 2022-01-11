@@ -20,15 +20,15 @@
 //! Pick the first 5 odd numbers from a clock that ticks every second, then start observing them:
 //!
 //! ```
-//! use arc_swap::ArcSwap;
 //! use async_nursery::Nursery;
+//! use crossbeam_queue::SegQueue;
 //! use std::{sync::Arc, time::Duration};
 //!
 //! use callbag::{filter, for_each, interval, map, pipe, take};
 //!
 //! let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 //!
-//! let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+//! let actual = Arc::new(SegQueue::new());
 //!
 //! pipe!(
 //!     interval(Duration::from_millis(1_000), nursery.clone()),
@@ -36,14 +36,10 @@
 //!     filter(|x| x % 2 == 1),
 //!     take(5),
 //!     for_each({
-//!         let vec = Arc::clone(&vec);
+//!         let actual = Arc::clone(&actual);
 //!         move |x| {
 //!             println!("{}", x);
-//!             vec.rcu(move |vec| {
-//!                 let mut vec = (**vec).clone();
-//!                 vec.push(x);
-//!                 vec
-//!             });
+//!             actual.push(x);
 //!         }
 //!     }),
 //! );
@@ -51,7 +47,18 @@
 //! drop(nursery);
 //! async_std::task::block_on(nursery_out);
 //!
-//! assert_eq!(vec.load()[..], [1, 3, 5, 7, 9]);
+//! assert_eq!(
+//!     &{
+//!         let mut v = vec![];
+//!         for _i in 0..actual.len() {
+//!             v.push(actual.pop().ok_or("unexpected empty actual")?);
+//!         }
+//!         v
+//!     }[..],
+//!     [1, 3, 5, 7, 9]
+//! );
+//! #
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ## Iterable programming examples
@@ -59,7 +66,7 @@
 //! From a range of numbers, pick 5 of them and divide them by 4, then start pulling those one by one:
 //!
 //! ```
-//! use arc_swap::ArcSwap;
+//! use crossbeam_queue::SegQueue;
 //! use std::sync::Arc;
 //!
 //! use callbag::{for_each, from_iter, map, pipe, take};
@@ -90,26 +97,33 @@
 //!     }
 //! }
 //!
-//! let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+//! let actual = Arc::new(SegQueue::new());
 //!
 //! pipe!(
 //!     from_iter(Range::new(40, 99)),
 //!     take(5),
 //!     map(|x| x as f64 / 4.0),
 //!     for_each({
-//!         let vec = Arc::clone(&vec);
+//!         let actual = Arc::clone(&actual);
 //!         move |x| {
 //!             println!("{}", x);
-//!             vec.rcu(move |vec| {
-//!                 let mut vec = (**vec).clone();
-//!                 vec.push(x);
-//!                 vec
-//!             });
+//!             actual.push(x);
 //!         }
 //!     }),
 //! );
 //!
-//! assert_eq!(vec.load()[..], [10.0, 10.25, 10.5, 10.75, 11.0]);
+//! assert_eq!(
+//!     &{
+//!         let mut v = vec![];
+//!         for _i in 0..actual.len() {
+//!             v.push(actual.pop().ok_or("unexpected empty actual")?);
+//!         }
+//!         v
+//!     }[..],
+//!     [10.0, 10.25, 10.5, 10.75, 11.0]
+//! );
+//! #
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! # API

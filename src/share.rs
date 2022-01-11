@@ -1,9 +1,6 @@
-use arc_swap::ArcSwapOption;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use never::Never;
-use std::{
-    iter,
-    sync::{Arc, RwLock},
-};
+use std::{iter, sync::Arc};
 
 use crate::{Message, Source};
 
@@ -21,47 +18,38 @@ use crate::{Message, Source};
 /// Share a listenable source to two listeners:
 ///
 /// ```
-/// use arc_swap::ArcSwap;
 /// use async_executors::{Timer, TimerExt};
 /// use async_nursery::{NurseExt, Nursery};
+/// use crossbeam_queue::SegQueue;
 /// use std::{sync::Arc, time::Duration};
 ///
 /// use callbag::{for_each, interval, share};
 ///
 /// let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
 ///
-/// let vec_1 = Arc::new(ArcSwap::from_pointee(vec![]));
-/// let vec_2 = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual_1 = Arc::new(SegQueue::new());
+/// let actual_2 = Arc::new(SegQueue::new());
 ///
 /// let source = Arc::new(share(interval(Duration::from_millis(1_000), nursery.clone())));
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec_1);
+///     let actual_1 = Arc::clone(&actual_1);
 ///     move |x| {
 ///         println!("{}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x);
-///             vec
-///         });
+///         actual_1.push(x);
 ///     }
 /// })(Arc::clone(&source));
 ///
 /// nursery
-///     .clone()
 ///     .nurse({
 ///         let nursery = nursery.clone();
-///         let vec = Arc::clone(&vec_2);
+///         let actual_2 = Arc::clone(&actual_2);
 ///         const DURATION: Duration = Duration::from_millis(3_500);
 ///         async move {
 ///             nursery.sleep(DURATION).await;
 ///             for_each(move |x| {
 ///                 println!("{}", x);
-///                 vec.rcu(move |vec| {
-///                     let mut vec = (**vec).clone();
-///                     vec.push(x);
-///                     vec
-///                 });
+///                 actual_2.push(x);
 ///             })(source);
 ///         }
 ///     })?;
@@ -70,8 +58,26 @@ use crate::{Message, Source};
 /// drop(nursery);
 /// async_std::task::block_on(nursery_out);
 ///
-/// assert_eq!(vec_1.load()[..], [0, 1, 2, 3, 4, 5]);
-/// assert_eq!(vec_2.load()[..], [3, 4, 5]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual_1.len() {
+///             v.push(actual_1.pop().ok_or("unexpected empty actual_1")?);
+///         }
+///         v
+///     }[..],
+///     [0, 1, 2, 3, 4, 5]
+/// );
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual_2.len() {
+///             v.push(actual_2.pop().ok_or("unexpected empty actual_2")?);
+///         }
+///         v
+///     }[..],
+///     [3, 4, 5]
+/// );
 /// #
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -79,31 +85,28 @@ use crate::{Message, Source};
 /// Share a pullable source to two pullers:
 ///
 /// ```
-/// use arc_swap::{ArcSwap, ArcSwapOption};
+/// use arc_swap::ArcSwapOption;
+/// use crossbeam_queue::SegQueue;
 /// use std::sync::Arc;
 ///
 /// use callbag::{from_iter, share, Message};
 ///
-/// let vec_1 = Arc::new(ArcSwap::from_pointee(vec![]));
-/// let vec_2 = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual_1 = Arc::new(SegQueue::new());
+/// let actual_2 = Arc::new(SegQueue::new());
 ///
 /// let source = share(from_iter([10, 20, 30, 40, 50]));
 ///
 /// let talkback = Arc::new(ArcSwapOption::from(None));
 /// source(Message::Handshake(Arc::new(
 ///     {
-///         let vec = Arc::clone(&vec_1);
+///         let actual_1 = Arc::clone(&actual_1);
 ///         let talkback = Arc::clone(&talkback);
 ///         move |message| {
 ///             if let Message::Handshake(sink) = message {
 ///                 talkback.store(Some(sink));
 ///             } else if let Message::Data(data) = message {
 ///                 println!("a{}", data);
-///                 vec.rcu(move |vec| {
-///                     let mut vec = (**vec).clone();
-///                     vec.push(format!("a{}", data));
-///                     vec
-///                 });
+///                 actual_1.push(format!("a{}", data));
 ///             }
 ///         }
 ///     }
@@ -112,15 +115,11 @@ use crate::{Message, Source};
 ///
 /// source(Message::Handshake(Arc::new(
 ///     {
-///         let vec = Arc::clone(&vec_2);
+///         let actual_2 = Arc::clone(&actual_2);
 ///         move |message| {
 ///             if let Message::Data(data) = message {
 ///                 println!("b{}", data);
-///                 vec.rcu(move |vec| {
-///                     let mut vec = (**vec).clone();
-///                     vec.push(format!("b{}", data));
-///                     vec
-///                 });
+///                 actual_2.push(format!("b{}", data));
 ///             }
 ///         }
 ///     }
@@ -128,12 +127,29 @@ use crate::{Message, Source};
 /// )));
 ///
 /// let talkback = talkback.load();
-/// let talkback = talkback.as_ref().ok_or("no talkback")?;
+/// let talkback = talkback.as_ref().ok_or("unexpected missing talkback")?;
 /// talkback(Message::Pull);
 /// talkback(Message::Pull);
 ///
-/// assert_eq!(vec_1.load()[..], ["a10", "a20"]);
-/// assert_eq!(vec_2.load()[..], ["b10", "b20"]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual_1.len() {
+///             v.push(actual_1.pop().ok_or("unexpected empty actual_1")?);
+///         }
+///         v
+///     }[..],
+///     ["a10", "a20"]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual_2.len() {
+///             v.push(actual_2.pop().ok_or("unexpected empty actual_2")?);
+///         }
+///         v
+///     }[..],
+///     ["b10", "b20"]
+/// );
 /// #
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -145,17 +161,21 @@ where
     S: Into<Arc<Source<T>>>,
 {
     let source: Arc<Source<T>> = source.into();
-    let sinks = Arc::new(RwLock::new(vec![]));
+    let sinks = Arc::new(ArcSwap::from_pointee(vec![]));
     let source_talkback: Arc<ArcSwapOption<Source<T>>> = Arc::new(ArcSwapOption::from(None));
 
     (move |message| {
         let sinks = Arc::clone(&sinks);
         let source_talkback = Arc::clone(&source_talkback);
         if let Message::Handshake(sink) = message {
-            {
-                let sinks = &mut *sinks.write().unwrap();
-                sinks.push(Arc::clone(&sink));
-            }
+            sinks.rcu({
+                let sink = Arc::clone(&sink);
+                move |sinks| {
+                    let mut sinks = (**sinks).clone();
+                    sinks.push(Arc::clone(&sink));
+                    sinks
+                }
+            });
 
             let talkback: Arc<Source<T>> = Arc::new(
                 {
@@ -176,16 +196,19 @@ where
                         }
                         Message::Error(_) | Message::Terminate => {
                             {
-                                let mut sinks = sinks.write().unwrap();
-                                let i = sinks.iter().position({
+                                let i = sinks.load().iter().position({
                                     let sink = Arc::clone(&sink);
                                     move |s| Arc::ptr_eq(s, &sink)
                                 });
                                 if let Some(i) = i {
-                                    sinks.splice(i..i + 1, iter::empty());
+                                    sinks.rcu(move |sinks| {
+                                        let mut sinks = (**sinks).clone();
+                                        sinks.splice(i..i + 1, iter::empty());
+                                        sinks
+                                    });
                                 }
                             }
-                            if sinks.read().unwrap().is_empty() {
+                            if sinks.load().is_empty() {
                                 let source_talkback = source_talkback.load();
                                 let source_talkback = source_talkback.as_ref().unwrap();
                                 source_talkback(Message::Terminate);
@@ -196,7 +219,7 @@ where
                 .into(),
             );
 
-            if sinks.read().unwrap().len() == 1 {
+            if sinks.load().len() == 1 {
                 source(Message::Handshake(Arc::new(
                     {
                         move |message: Message<T, Never>| {
@@ -204,17 +227,12 @@ where
                                 source_talkback.store(Some(source));
                                 sink(Message::Handshake(Arc::clone(&talkback)));
                             } else {
-                                let sinks = {
-                                    let sinks = &*sinks.read().unwrap();
-                                    sinks.clone()
-                                };
-                                for s in sinks {
+                                for s in &**sinks.load() {
                                     s(message.clone());
                                 }
                             }
                             if let Message::Error(_) | Message::Terminate = message {
-                                let sinks = &mut *sinks.write().unwrap();
-                                sinks.clear();
+                                sinks.store(Arc::new(vec![]));
                             }
                         }
                     }

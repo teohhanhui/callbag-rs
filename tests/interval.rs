@@ -5,11 +5,8 @@ use {
     arc_swap::ArcSwapOption,
     async_executors::Timer,
     async_nursery::{NurseExt, Nursery},
-    std::{
-        collections::VecDeque,
-        sync::{Arc, RwLock},
-        time::Duration,
-    },
+    crossbeam_queue::SegQueue,
+    std::{sync::Arc, time::Duration},
     tracing::info,
     tracing_futures::Instrument,
 };
@@ -49,7 +46,11 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
     let nursery = nursery.in_current_span();
 
     let expected = [0, 1, 2, 3, 4];
-    let expected: Arc<RwLock<VecDeque<_>>> = Arc::new(RwLock::new(expected.into()));
+    let expected = {
+        let q = SegQueue::new();
+        expected.into_iter().for_each(|item| q.push(item));
+        Arc::new(q)
+    };
 
     let observe = {
         let talkback = ArcSwapOption::from(None);
@@ -59,15 +60,7 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                 } else if let Message::Data(data) = message {
-                    assert_eq!(
-                        data,
-                        {
-                            let expected = &mut *expected.write().unwrap();
-                            expected.pop_front().unwrap()
-                        },
-                        "interval sent data"
-                    );
-                    let expected = &*expected.read().unwrap();
+                    assert_eq!(data, expected.pop().unwrap(), "interval sent data");
                     if expected.is_empty() {
                         let talkback = talkback.load();
                         let talkback = talkback.as_ref().unwrap();

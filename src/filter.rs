@@ -12,28 +12,35 @@ use crate::{Message, Source};
 /// # Examples
 ///
 /// ```
-/// use arc_swap::ArcSwap;
+/// use crossbeam_queue::SegQueue;
 /// use std::sync::Arc;
 ///
 /// use callbag::{filter, for_each, from_iter};
 ///
-/// let vec = Arc::new(ArcSwap::from_pointee(vec![]));
+/// let actual = Arc::new(SegQueue::new());
 ///
 /// let source = filter(|x| x % 2 == 1)(from_iter([1, 2, 3, 4, 5]));
 ///
 /// for_each({
-///     let vec = Arc::clone(&vec);
+///     let actual = Arc::clone(&actual);
 ///     move |x| {
 ///         println!("{}", x);
-///         vec.rcu(move |vec| {
-///             let mut vec = (**vec).clone();
-///             vec.push(x);
-///             vec
-///         });
+///         actual.push(x);
 ///     }
 /// })(source);
 ///
-/// assert_eq!(vec.load()[..], [1, 3, 5]);
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         for _i in 0..actual.len() {
+///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///         }
+///         v
+///     }[..],
+///     [1, 3, 5]
+/// );
+/// #
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn filter<I: 'static, F: 'static, S>(condition: F) -> Box<dyn Fn(S) -> Source<I>>
 where
