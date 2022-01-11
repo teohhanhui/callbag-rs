@@ -813,9 +813,9 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
 {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
-
     #[allow(clippy::mutex_atomic)]
-    let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
+    let ready_pair = Arc::new((Mutex::new(false), Condvar::new()));
+
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> =
         vec![(|m| matches!(m, Message::Handshake(_)), "Message::Handshake")];
     let outer_expected_types = {
@@ -839,7 +839,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
         let source_outer_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_outer = Arc::new(
             {
-                let outer_completed_pair = Arc::clone(&outer_completed_pair);
+                let ready_pair = Arc::clone(&ready_pair);
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
                     info!("up (outer): {:?}", message);
@@ -859,9 +859,9 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                         sink(Message::Data(true));
                         sink(Message::Terminate);
                         {
-                            let (lock, cvar) = &*outer_completed_pair;
-                            let mut outer_completed = lock.lock().unwrap();
-                            *outer_completed = true;
+                            let (lock, cvar) = &*ready_pair;
+                            let mut ready = lock.lock().unwrap();
+                            *ready = true;
                             cvar.notify_one();
                         }
                     }
@@ -889,13 +889,13 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                     let talkback = source;
                     nursery
                         .nurse({
-                            let outer_completed_pair = Arc::clone(&outer_completed_pair);
+                            let ready_pair = Arc::clone(&ready_pair);
                             async move {
                                 {
-                                    let (lock, cvar) = &*outer_completed_pair;
-                                    let mut outer_completed = lock.lock().unwrap();
-                                    while !*outer_completed {
-                                        outer_completed = cvar.wait(outer_completed).unwrap();
+                                    let (lock, cvar) = &*ready_pair;
+                                    let mut ready = lock.lock().unwrap();
+                                    while !*ready {
+                                        ready = cvar.wait(ready).unwrap();
                                     }
                                 }
                                 talkback(Message::Terminate);
@@ -933,9 +933,9 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_errors() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
-
     #[allow(clippy::mutex_atomic)]
-    let outer_completed_pair = Arc::new((Mutex::new(false), Condvar::new()));
+    let ready_pair = Arc::new((Mutex::new(false), Condvar::new()));
+
     let outer_expected_types: Vec<(MessagePredicate<_, _>, &str)> =
         vec![(|m| matches!(m, Message::Handshake(_)), "Message::Handshake")];
     let outer_expected_types = {
@@ -961,7 +961,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
         let source_outer_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_outer = Arc::new(
             {
-                let outer_completed_pair = Arc::clone(&outer_completed_pair);
+                let ready_pair = Arc::clone(&ready_pair);
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
                     info!("up (outer): {:?}", message);
@@ -981,9 +981,9 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                         sink(Message::Data(true));
                         sink(Message::Terminate);
                         {
-                            let (lock, cvar) = &*outer_completed_pair;
-                            let mut outer_completed = lock.lock().unwrap();
-                            *outer_completed = true;
+                            let (lock, cvar) = &*ready_pair;
+                            let mut ready = lock.lock().unwrap();
+                            *ready = true;
                             cvar.notify_one();
                         }
                     }
@@ -1016,13 +1016,13 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                         }
                         nursery
                             .nurse({
-                                let outer_completed_pair = Arc::clone(&outer_completed_pair);
+                                let ready_pair = Arc::clone(&ready_pair);
                                 async move {
                                     {
-                                        let (lock, cvar) = &*outer_completed_pair;
-                                        let mut outer_completed = lock.lock().unwrap();
-                                        while !*outer_completed {
-                                            outer_completed = cvar.wait(outer_completed).unwrap();
+                                        let (lock, cvar) = &*ready_pair;
+                                        let mut ready = lock.lock().unwrap();
+                                        while !*ready {
+                                            ready = cvar.wait(ready).unwrap();
                                         }
                                     }
                                     sink(Message::Error({

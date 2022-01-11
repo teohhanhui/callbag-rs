@@ -13,7 +13,10 @@ use {
     async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
     std::{
-        sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
+        sync::{
+            atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
+            Condvar, Mutex,
+        },
         time::Duration,
     },
     tracing_futures::Instrument,
@@ -230,6 +233,8 @@ async fn it_shares_an_async_finite_listenable_source() {
 async fn it_shares_a_pullable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
+    #[allow(clippy::mutex_atomic)]
+    let ready_pair = Arc::new((Mutex::new(false), Condvar::new()));
 
     let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
         (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
@@ -290,71 +295,103 @@ async fn it_shares_a_pullable_source() {
         Arc::new(q)
     };
 
-    let make_source = move || {
-        let sink_ref = Arc::new(ArcSwapOption::from(None));
-        let sent = Arc::new(AtomicUsize::new(0));
-        let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
-        let source = Arc::new(
-            {
-                let source_ref = Arc::clone(&source_ref);
-                move |message| {
-                    info!("up: {:?}", message);
-                    assert!(!upwards_expected.is_empty(), "source can be pulled");
-                    {
-                        let e = upwards_expected.pop().unwrap();
-                        assert!(e.0(&message), "upwards type is expected: {}", e.1);
-                    }
+    let make_source = {
+        let ready_pair = Arc::clone(&ready_pair);
+        move || {
+            let sink_ref = Arc::new(ArcSwapOption::from(None));
+            let sent = Arc::new(AtomicUsize::new(0));
+            let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
+            let source = Arc::new(
+                {
+                    let source_ref = Arc::clone(&source_ref);
+                    move |message| {
+                        info!("up: {:?}", message);
+                        assert!(!upwards_expected.is_empty(), "source can be pulled");
+                        {
+                            let e = upwards_expected.pop().unwrap();
+                            assert!(e.0(&message), "upwards type is expected: {}", e.1);
+                        }
 
-                    if let Message::Handshake(sink) = message {
-                        sink_ref.store(Some(sink));
-                        let sink_ref = sink_ref.load();
-                        let sink_ref = sink_ref.as_ref().unwrap();
-                        let source = {
-                            let source_ref = &mut *source_ref.write().unwrap();
-                            source_ref.take().unwrap()
-                        };
-                        sink_ref(Message::Handshake(source));
-                        return;
-                    }
-                    if sent.load(AtomicOrdering::Acquire) == 3 {
-                        let sink_ref = sink_ref.load();
-                        let sink_ref = sink_ref.as_ref().unwrap();
-                        sink_ref(Message::Terminate);
-                        return;
-                    }
-                    if sent.load(AtomicOrdering::Acquire) == 0 {
-                        sent.fetch_add(1, AtomicOrdering::AcqRel);
-                        let sink_ref = sink_ref.load();
-                        let sink_ref = sink_ref.as_ref().unwrap();
-                        sink_ref(Message::Data(10));
-                        return;
-                    }
-                    if sent.load(AtomicOrdering::Acquire) == 1 {
-                        sent.fetch_add(1, AtomicOrdering::AcqRel);
-                        let sink_ref = sink_ref.load();
-                        let sink_ref = sink_ref.as_ref().unwrap();
-                        sink_ref(Message::Data(20));
-                        return;
-                    }
-                    if sent.load(AtomicOrdering::Acquire) == 2 {
-                        sent.fetch_add(1, AtomicOrdering::AcqRel);
-                        let sink_ref = sink_ref.load();
-                        let sink_ref = sink_ref.as_ref().unwrap();
-                        sink_ref(Message::Data(30));
+                        if let Message::Handshake(sink) = message {
+                            sink_ref.store(Some(sink));
+                            let sink_ref = sink_ref.load();
+                            let sink_ref = sink_ref.as_ref().unwrap();
+                            let source = {
+                                let source_ref = &mut *source_ref.write().unwrap();
+                                source_ref.take().unwrap()
+                            };
+                            sink_ref(Message::Handshake(source));
+                            {
+                                let (lock, cvar) = &*ready_pair;
+                                let mut ready = lock.lock().unwrap();
+                                *ready = true;
+                                cvar.notify_one();
+                            }
+                            return;
+                        }
+                        if sent.load(AtomicOrdering::Acquire) == 3 {
+                            let sink_ref = sink_ref.load();
+                            let sink_ref = sink_ref.as_ref().unwrap();
+                            sink_ref(Message::Terminate);
+                            return;
+                        }
+                        if sent.load(AtomicOrdering::Acquire) == 0 {
+                            sent.fetch_add(1, AtomicOrdering::AcqRel);
+                            {
+                                let (lock, _) = &*ready_pair;
+                                let mut ready = lock.lock().unwrap();
+                                *ready = false;
+                            }
+                            let sink_ref = sink_ref.load();
+                            let sink_ref = sink_ref.as_ref().unwrap();
+                            sink_ref(Message::Data(10));
+                            {
+                                let (lock, cvar) = &*ready_pair;
+                                let mut ready = lock.lock().unwrap();
+                                *ready = true;
+                                cvar.notify_one();
+                            }
+                            return;
+                        }
+                        if sent.load(AtomicOrdering::Acquire) == 1 {
+                            sent.fetch_add(1, AtomicOrdering::AcqRel);
+                            {
+                                let (lock, _) = &*ready_pair;
+                                let mut ready = lock.lock().unwrap();
+                                *ready = false;
+                            }
+                            let sink_ref = sink_ref.load();
+                            let sink_ref = sink_ref.as_ref().unwrap();
+                            sink_ref(Message::Data(20));
+                            {
+                                let (lock, cvar) = &*ready_pair;
+                                let mut ready = lock.lock().unwrap();
+                                *ready = true;
+                                cvar.notify_one();
+                            }
+                            return;
+                        }
+                        if sent.load(AtomicOrdering::Acquire) == 2 {
+                            sent.fetch_add(1, AtomicOrdering::AcqRel);
+                            let sink_ref = sink_ref.load();
+                            let sink_ref = sink_ref.as_ref().unwrap();
+                            sink_ref(Message::Data(30));
+                        }
                     }
                 }
+                .into(),
+            );
+            {
+                let mut source_ref = source_ref.write().unwrap();
+                *source_ref = Some(Arc::clone(&source));
             }
-            .into(),
-        );
-        {
-            let mut source_ref = source_ref.write().unwrap();
-            *source_ref = Some(Arc::clone(&source));
+            source
         }
-        source
     };
 
     let make_sink_a = {
         let nursery = nursery.clone();
+        let ready_pair = Arc::clone(&ready_pair);
         move || {
             let talkback = Arc::new(ArcSwapOption::from(None));
             Arc::new(
@@ -368,8 +405,16 @@ async fn it_shares_a_pullable_source() {
                         talkback.store(Some(source));
                         nursery
                             .nurse({
+                                let ready_pair = Arc::clone(&ready_pair);
                                 let talkback = Arc::clone(&talkback);
                                 async move {
+                                    {
+                                        let (lock, cvar) = &*ready_pair;
+                                        let mut ready = lock.lock().unwrap();
+                                        while !*ready {
+                                            ready = cvar.wait(ready).unwrap();
+                                        }
+                                    }
                                     let talkback = talkback.load();
                                     let talkback = talkback.as_ref().unwrap();
                                     talkback(Message::Pull);
@@ -384,8 +429,16 @@ async fn it_shares_a_pullable_source() {
                         if data == 20 {
                             nursery
                                 .nurse({
+                                    let ready_pair = Arc::clone(&ready_pair);
                                     let talkback = Arc::clone(&talkback);
                                     async move {
+                                        {
+                                            let (lock, cvar) = &*ready_pair;
+                                            let mut ready = lock.lock().unwrap();
+                                            while !*ready {
+                                                ready = cvar.wait(ready).unwrap();
+                                            }
+                                        }
                                         let talkback = talkback.load();
                                         let talkback = talkback.as_ref().unwrap();
                                         talkback(Message::Pull);
@@ -421,8 +474,16 @@ async fn it_shares_a_pullable_source() {
                         if data == 10 {
                             nursery
                                 .nurse({
+                                    let ready_pair = Arc::clone(&ready_pair);
                                     let talkback = Arc::clone(&talkback);
                                     async move {
+                                        {
+                                            let (lock, cvar) = &*ready_pair;
+                                            let mut ready = lock.lock().unwrap();
+                                            while !*ready {
+                                                ready = cvar.wait(ready).unwrap();
+                                            }
+                                        }
                                         let talkback = talkback.load();
                                         let talkback = talkback.as_ref().unwrap();
                                         talkback(Message::Pull);
