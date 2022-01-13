@@ -46,14 +46,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [3, 4, 5, 6]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// On a pullable source:
@@ -106,14 +104,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [14, 15, 16, 17, 18, 19, 20]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn skip<T: 'static, S>(max: usize) -> Box<dyn Fn(S) -> Source<T>>
 where
@@ -135,51 +131,55 @@ where
                                     move |message| match message {
                                         Message::Handshake(_) => {
                                             panic!("sink handshake has already occurred");
-                                        }
+                                        },
                                         Message::Data(_) => {
                                             panic!("sink must not send data");
-                                        }
+                                        },
                                         Message::Pull => {
                                             let talkback = talkback.load();
-                                            let source = talkback.as_ref().unwrap();
+                                            let source =
+                                                talkback.as_ref().expect("source talkback not set");
                                             source(Message::Pull);
-                                        }
+                                        },
                                         Message::Error(error) => {
                                             let talkback = talkback.load();
-                                            let source = talkback.as_ref().unwrap();
+                                            let source =
+                                                talkback.as_ref().expect("source talkback not set");
                                             source(Message::Error(error));
-                                        }
+                                        },
                                         Message::Terminate => {
                                             let talkback = talkback.load();
-                                            let source = talkback.as_ref().unwrap();
+                                            let source =
+                                                talkback.as_ref().expect("source talkback not set");
                                             source(Message::Terminate);
-                                        }
+                                        },
                                     }
                                 }
                                 .into(),
                             )));
-                        }
+                        },
                         Message::Data(data) => {
                             if skipped.load(AtomicOrdering::Acquire) < max {
                                 skipped.fetch_add(1, AtomicOrdering::AcqRel);
                                 {
                                     let talkback = talkback.load();
-                                    let talkback = talkback.as_ref().unwrap();
+                                    let talkback =
+                                        talkback.as_ref().expect("source talkback not set");
                                     talkback(Message::Pull);
                                 }
                             } else {
                                 sink(Message::Data(data));
                             }
-                        }
+                        },
                         Message::Pull => {
                             panic!("source must not pull");
-                        }
+                        },
                         Message::Error(error) => {
                             sink(Message::Error(error));
-                        }
+                        },
                         Message::Terminate => {
                             sink(Message::Terminate);
-                        }
+                        },
                     })
                     .into(),
                 )))

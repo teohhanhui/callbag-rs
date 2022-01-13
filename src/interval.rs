@@ -46,14 +46,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [0, 1, 2, 3]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn interval(
     period: Duration,
@@ -63,23 +61,24 @@ pub fn interval(
         if let Message::Handshake(sink) = message {
             let i = AtomicUsize::new(0);
             let interval_cleared = Arc::new(AtomicBool::new(false));
-            nursery
-                .nurse({
-                    let nursery = nursery.clone();
-                    let sink = Arc::clone(&sink);
-                    let interval_cleared = Arc::clone(&interval_cleared);
-                    async move {
-                        loop {
-                            nursery.sleep(period).await;
-                            if interval_cleared.load(AtomicOrdering::Acquire) {
-                                break;
-                            }
-                            let i = i.fetch_add(1, AtomicOrdering::AcqRel);
-                            sink(Message::Data(i));
+            if let Err(err) = nursery.nurse({
+                let nursery = nursery.clone();
+                let sink = Arc::clone(&sink);
+                let interval_cleared = Arc::clone(&interval_cleared);
+                async move {
+                    loop {
+                        nursery.sleep(period).await;
+                        if interval_cleared.load(AtomicOrdering::Acquire) {
+                            break;
                         }
+                        let i = i.fetch_add(1, AtomicOrdering::AcqRel);
+                        sink(Message::Data(i));
                     }
-                })
-                .unwrap();
+                }
+            }) {
+                sink(Message::Error(Arc::new(err)));
+                return;
+            }
             sink(Message::Handshake(Arc::new(
                 (move |message| {
                     if let Message::Error(_) | Message::Terminate = message {

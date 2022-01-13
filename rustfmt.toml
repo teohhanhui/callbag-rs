@@ -1,6 +1,6 @@
 # empty_item_single_line = false
 # imports_layout = "HorizontalVertical"
-# match_block_trailing_comma = true
+match_block_trailing_comma = true
 newline_style = "Unix"
 # normalize_comments = true
 # normalize_doc_attributes = true

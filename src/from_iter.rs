@@ -40,14 +40,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [10, 20, 30, 40]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// Convert an Iterator:
@@ -74,14 +72,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [(0, 10), (1, 20), (2, 30), (3, 40)]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn from_iter<T: 'static, I: 'static>(iter: I) -> Source<T>
 where
@@ -138,10 +134,10 @@ where
                     match message {
                         Message::Handshake(_) => {
                             panic!("sink handshake has already occurred");
-                        }
+                        },
                         Message::Data(_) => {
                             panic!("sink must not send data");
-                        }
+                        },
                         Message::Pull => {
                             got_pull.store(true, AtomicOrdering::Release);
                             if !in_loop.load(AtomicOrdering::Acquire)
@@ -149,10 +145,10 @@ where
                             {
                                 r#loop();
                             }
-                        }
+                        },
                         Message::Error(_) | Message::Terminate => {
                             completed.store(true, AtomicOrdering::Release);
-                        }
+                        },
                     }
                 })
                 .into(),

@@ -1,12 +1,13 @@
 use arc_swap::ArcSwapOption;
-use crossbeam_queue::SegQueue;
+use crossbeam_queue::{ArrayQueue, SegQueue};
+use never::Never;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
     Arc,
 };
 use tracing::info;
 
-use crate::common::MessagePredicate;
+use crate::common::VariantName;
 
 use callbag::{from_iter, Message};
 
@@ -36,34 +37,34 @@ wasm_bindgen_test_configure!(run_in_browser);
 fn it_sends_array_items_iterable_to_a_puller_sink() {
     let source = from_iter([10, 20, 30]);
 
-    let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
-        (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
-        (|m| matches!(m, Message::Data(_)), "Message::Data"),
-        (|m| matches!(m, Message::Data(_)), "Message::Data"),
-        (|m| matches!(m, Message::Data(_)), "Message::Data"),
-        (|m| matches!(m, Message::Terminate), "Message::Terminate"),
-    ];
+    let downwards_expected_types = ["Handshake", "Data", "Data", "Data", "Terminate"];
     let downwards_expected_types = {
-        let q = SegQueue::new();
-        downwards_expected_types
-            .into_iter()
-            .for_each(|item| q.push(item));
+        let q = ArrayQueue::new(downwards_expected_types.len());
+        for v in downwards_expected_types {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
     let downwards_expected = [10, 20, 30];
     let downwards_expected = {
-        let q = SegQueue::new();
-        downwards_expected.into_iter().for_each(|item| q.push(item));
+        let q = ArrayQueue::new(downwards_expected.len());
+        for v in downwards_expected {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
-        (move |message| {
-            info!("down: {:?}", message);
+        (move |message: Message<_, Never>| {
+            info!("down: {message:?}");
             {
                 let et = downwards_expected_types.pop().unwrap();
-                assert!(et.0(&message), "downwards type is expected: {}", et.1);
+                assert_eq!(
+                    message.variant_name(),
+                    et,
+                    "downwards type is expected: {et}"
+                );
             }
 
             if let Message::Handshake(source) = message {
@@ -74,7 +75,7 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
             } else if let Message::Data(data) = message {
                 {
                     let e = downwards_expected.pop().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {}", e);
+                    assert_eq!(data, e, "downwards data is expected: {e}");
                 }
                 let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
@@ -95,34 +96,34 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
 fn it_sends_array_entries_iterator_to_a_puller_sink() {
     let source = from_iter(["a", "b", "c"].into_iter().enumerate());
 
-    let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
-        (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
-        (|m| matches!(m, Message::Data(_)), "Message::Data"),
-        (|m| matches!(m, Message::Data(_)), "Message::Data"),
-        (|m| matches!(m, Message::Data(_)), "Message::Data"),
-        (|m| matches!(m, Message::Terminate), "Message::Terminate"),
-    ];
+    let downwards_expected_types = ["Handshake", "Data", "Data", "Data", "Terminate"];
     let downwards_expected_types = {
-        let q = SegQueue::new();
-        downwards_expected_types
-            .into_iter()
-            .for_each(|item| q.push(item));
+        let q = ArrayQueue::new(downwards_expected_types.len());
+        for v in downwards_expected_types {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
     let downwards_expected = [(0, "a"), (1, "b"), (2, "c")];
     let downwards_expected = {
-        let q = SegQueue::new();
-        downwards_expected.into_iter().for_each(|item| q.push(item));
+        let q = ArrayQueue::new(downwards_expected.len());
+        for v in downwards_expected {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
-        (move |message| {
-            info!("down: {:?}", message);
+        (move |message: Message<_, Never>| {
+            info!("down: {message:?}");
             {
                 let et = downwards_expected_types.pop().unwrap();
-                assert!(et.0(&message), "downwards type is expected: {}", et.1);
+                assert_eq!(
+                    message.variant_name(),
+                    et,
+                    "downwards type is expected: {et}"
+                );
             }
 
             if let Message::Handshake(source) = message {
@@ -133,7 +134,7 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
             } else if let Message::Data(data) = message {
                 {
                     let e = downwards_expected.pop().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {:?}", e);
+                    assert_eq!(data, e, "downwards data is expected: {e:?}");
                 }
                 let talkback = talkback.load();
                 let talkback = talkback.as_ref().unwrap();
@@ -187,7 +188,7 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
         {
             let iterated = Arc::clone(&iterated);
             move |message| {
-                // info!("down: {:?}", message); // don't blow up stdout
+                // info!("down: {message:?}"); // don't blow up stdout
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                     let talkback = talkback.load();
@@ -226,15 +227,12 @@ fn it_stops_sending_after_source_completion() {
     let source = from_iter([10, 20, 30]);
 
     let actual = Arc::new(SegQueue::new());
-    let downwards_expected_types: Vec<(MessagePredicate<_, _>, &str)> = vec![
-        (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
-        (|m| matches!(m, Message::Data(_)), "Message::Data"),
-    ];
+    let downwards_expected_types = ["Handshake", "Data"];
     let downwards_expected_types = {
-        let q = SegQueue::new();
-        downwards_expected_types
-            .into_iter()
-            .for_each(|item| q.push(item));
+        let q = ArrayQueue::new(downwards_expected_types.len());
+        for v in downwards_expected_types {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
 
@@ -242,11 +240,15 @@ fn it_stops_sending_after_source_completion() {
     source(Message::Handshake(Arc::new(
         {
             let actual = Arc::clone(&actual);
-            move |message| {
-                info!("down: {:?}", message);
+            move |message: Message<_, Never>| {
+                info!("down: {message:?}");
                 {
                     let et = downwards_expected_types.pop().unwrap();
-                    assert!(et.0(&message), "downwards type is expected: {}", et.1);
+                    assert_eq!(
+                        message.variant_name(),
+                        et,
+                        "downwards type is expected: {et}"
+                    );
                 }
 
                 if let Message::Handshake(source) = message {

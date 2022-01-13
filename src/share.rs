@@ -62,7 +62,7 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual_1.len() {
-///             v.push(actual_1.pop().ok_or("unexpected empty actual_1")?);
+///             v.push(actual_1.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -72,7 +72,7 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual_2.len() {
-///             v.push(actual_2.pop().ok_or("unexpected empty actual_2")?);
+///             v.push(actual_2.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -102,8 +102,8 @@ use crate::{Message, Source};
 ///         let actual_1 = Arc::clone(&actual_1);
 ///         let talkback = Arc::clone(&talkback);
 ///         move |message| {
-///             if let Message::Handshake(sink) = message {
-///                 talkback.store(Some(sink));
+///             if let Message::Handshake(source) = message {
+///                 talkback.store(Some(source));
 ///             } else if let Message::Data(data) = message {
 ///                 println!("a{}", data);
 ///                 actual_1.push(format!("a{}", data));
@@ -127,7 +127,7 @@ use crate::{Message, Source};
 /// )));
 ///
 /// let talkback = talkback.load();
-/// let talkback = talkback.as_ref().ok_or("unexpected missing talkback")?;
+/// let talkback = talkback.as_ref().ok_or("source talkback not set")?;
 /// talkback(Message::Pull);
 /// talkback(Message::Pull);
 ///
@@ -135,7 +135,7 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual_1.len() {
-///             v.push(actual_1.pop().ok_or("unexpected empty actual_1")?);
+///             v.push(actual_1.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -144,7 +144,7 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual_2.len() {
-///             v.push(actual_2.pop().ok_or("unexpected empty actual_2")?);
+///             v.push(actual_2.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -185,15 +185,16 @@ where
                     move |message| match message {
                         Message::Handshake(_) => {
                             panic!("sink handshake has already occurred");
-                        }
+                        },
                         Message::Data(_) => {
                             panic!("sink must not send data");
-                        }
+                        },
                         Message::Pull => {
                             let source_talkback = source_talkback.load();
-                            let source_talkback = source_talkback.as_ref().unwrap();
+                            let source_talkback =
+                                source_talkback.as_ref().expect("source talkback not set");
                             source_talkback(Message::Pull);
-                        }
+                        },
                         Message::Error(_) | Message::Terminate => {
                             {
                                 let i = sinks.load().iter().position({
@@ -210,10 +211,11 @@ where
                             }
                             if sinks.load().is_empty() {
                                 let source_talkback = source_talkback.load();
-                                let source_talkback = source_talkback.as_ref().unwrap();
+                                let source_talkback =
+                                    source_talkback.as_ref().expect("source talkback not set");
                                 source_talkback(Message::Terminate);
                             }
-                        }
+                        },
                     }
                 }
                 .into(),

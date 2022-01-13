@@ -50,7 +50,7 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -65,8 +65,6 @@ use crate::{Message, Source};
 ///         (8, 1),
 ///     ]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// # Implementation notes
@@ -129,21 +127,21 @@ macro_rules! combine_impls {
                                         Message::Pull => {
                                             $({
                                                 let source_talkback = source_talkbacks.$idx.load();
-                                                let source_talkback = source_talkback.as_ref().unwrap();
+                                                let source_talkback = source_talkback.as_ref().expect("source talkback not set");
                                                 source_talkback(Message::Pull);
                                             })+
                                         }
                                         Message::Error(ref error) => {
                                             $({
                                                 let source_talkback = source_talkbacks.$idx.load();
-                                                let source_talkback = source_talkback.as_ref().unwrap();
+                                                let source_talkback = source_talkback.as_ref().expect("source talkback not set");
                                                 source_talkback(Message::Error(error.clone()));
                                             })+
                                         }
                                         Message::Terminate => {
                                             $({
                                                 let source_talkback = source_talkbacks.$idx.load();
-                                                let source_talkback = source_talkback.as_ref().unwrap();
+                                                let source_talkback = source_talkback.as_ref().expect("source talkback not set");
                                                 source_talkback(Message::Terminate);
                                             })+
                                         }

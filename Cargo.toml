@@ -3,6 +3,7 @@ name = "callbag"
 version = "0.13.0"
 authors = ["Teoh Han Hui <teohhanhui@gmail.com>"]
 edition = "2021"
+rust-version = "1.58"
 description = "Rust implementation of the callbag spec for reactive/iterable programming"
 repository = "https://github.com/teohhanhui/callbag-rs"
 license = "MIT OR Apache-2.0"
@@ -26,10 +27,11 @@ tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes", "unstable"] }
-async_executors = { version = "0.5.1", features = ["async_std", "timer", "tracing"] }
+async_executors = { version = "0.5.1", features = ["async_std", "tracing"] }
 async_nursery = { version = "0.4.0", features = ["tracing"] }
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dev-dependencies]
+async_executors = { version = "0.5.1", features = ["timer"] }
 wasm-bindgen-test = "0.3.28"
 
 [features]
@@ -123,9 +125,3 @@ required-features = ["skip"]
 [[test]]
 name = "take"
 required-features = ["take"]
-
-[profile.dev]
-incremental = false # https://github.com/rust-lang/rust/issues/91807
-
-[profile.test]
-incremental = false # https://github.com/rust-lang/rust/issues/91807

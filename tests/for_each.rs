@@ -1,12 +1,12 @@
 use arc_swap::ArcSwapOption;
-use crossbeam_queue::SegQueue;
+use crossbeam_queue::ArrayQueue;
 use std::sync::{
     atomic::{AtomicUsize, Ordering as AtomicOrdering},
     Arc, RwLock,
 };
 use tracing::info;
 
-use crate::common::MessagePredicate;
+use crate::common::VariantName;
 
 use callbag::{for_each, Message, Source};
 
@@ -14,6 +14,7 @@ use callbag::{for_each, Message, Source};
 use {
     async_executors::{Timer, TimerExt},
     async_nursery::{NurseExt, Nursery},
+    never::Never,
     std::time::Duration,
     tracing_futures::Instrument,
 };
@@ -42,25 +43,25 @@ wasm_bindgen_test_configure!(run_in_browser);
     wasm_bindgen_test
 )]
 fn it_iterates_a_finite_pullable_source() {
-    let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
-        (|m| matches!(m, Message::Pull), "Message::Pull"),
-        (|m| matches!(m, Message::Pull), "Message::Pull"),
-        (|m| matches!(m, Message::Pull), "Message::Pull"),
-    ];
+    let upwards_expected = ["Pull", "Pull", "Pull"];
     let upwards_expected = {
-        let q = SegQueue::new();
-        upwards_expected.into_iter().for_each(|item| q.push(item));
+        let q = ArrayQueue::new(upwards_expected.len());
+        for v in upwards_expected {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
     let downwards_expected = ["a", "b", "c"];
     let downwards_expected = {
-        let q = SegQueue::new();
-        downwards_expected.into_iter().for_each(|item| q.push(item));
+        let q = ArrayQueue::new(downwards_expected.len());
+        for v in downwards_expected {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
 
     let sink = for_each(move |x| {
-        info!("down: {}", x);
+        info!("down: {x}");
         assert_eq!(
             x,
             downwards_expected.pop().unwrap(),
@@ -76,7 +77,7 @@ fn it_iterates_a_finite_pullable_source() {
             {
                 let source_ref = Arc::clone(&source_ref);
                 move |message| {
-                    info!("up: {:?}", message);
+                    info!("up: {message:?}");
                     if let Message::Handshake(sink) = message {
                         sink_ref.store(Some(sink));
                         let sink_ref = sink_ref.load();
@@ -97,7 +98,7 @@ fn it_iterates_a_finite_pullable_source() {
                     assert!(!upwards_expected.is_empty(), "source can be pulled");
                     {
                         let expected = upwards_expected.pop().unwrap();
-                        assert!(expected.0(&message), "upwards type is expected");
+                        assert_eq!(message.variant_name(), expected, "upwards type is expected");
                     }
                     if sent.load(AtomicOrdering::Acquire) == 0 {
                         sent.fetch_add(1, AtomicOrdering::AcqRel);
@@ -149,22 +150,20 @@ async fn it_observes_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let upwards_expected: Vec<(MessagePredicate<_, _>, &str)> = vec![
-        (|m| matches!(m, Message::Handshake(_)), "Message::Handshake"),
-        (|m| matches!(m, Message::Pull), "Message::Pull"),
-        (|m| matches!(m, Message::Pull), "Message::Pull"),
-        (|m| matches!(m, Message::Pull), "Message::Pull"),
-        (|m| matches!(m, Message::Pull), "Message::Pull"),
-    ];
+    let upwards_expected = ["Handshake", "Pull", "Pull", "Pull", "Pull"];
     let upwards_expected = {
-        let q = SegQueue::new();
-        upwards_expected.into_iter().for_each(|item| q.push(item));
+        let q = ArrayQueue::new(upwards_expected.len());
+        for v in upwards_expected {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
     let downwards_expected = [10, 20, 30];
     let downwards_expected = {
-        let q = SegQueue::new();
-        downwards_expected.into_iter().for_each(|item| q.push(item));
+        let q = ArrayQueue::new(downwards_expected.len());
+        for v in downwards_expected {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
 
@@ -176,11 +175,11 @@ async fn it_observes_an_async_finite_listenable_source() {
             let source = Arc::new(
                 {
                     let source_ref = Arc::clone(&source_ref);
-                    move |message| {
-                        info!("up: {:?}", message);
+                    move |message: Message<Never, _>| {
+                        info!("up: {message:?}");
                         {
                             let e = upwards_expected.pop().unwrap();
-                            assert!(e.0(&message), "upwards type is expected: {}", e.1);
+                            assert_eq!(message.variant_name(), e, "upwards type is expected: {e}");
                         }
                         if let Message::Handshake(sink) = message {
                             nursery
@@ -235,9 +234,9 @@ async fn it_observes_an_async_finite_listenable_source() {
 
     let source = make_source();
     for_each(move |x| {
-        info!("down: {}", x);
+        info!("down: {x}");
         let e = downwards_expected.pop().unwrap();
-        assert_eq!(x, e, "downwards data is expected: {}", e);
+        assert_eq!(x, e, "downwards data is expected: {e}");
     })(source);
 
     let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
