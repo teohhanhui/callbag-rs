@@ -44,6 +44,9 @@ runs:
         esac
         echo "CARGO_BUILD_TARGET=$CARGO_BUILD_TARGET" >> $GITHUB_ENV
       shell: bash
+    - run: |
+        echo "::add-matcher::${GITHUB_WORKSPACE}/.github/matchers/rust.json"
+      shell: bash
     - name: Run cargo ${{ inputs.command }}
       if: ${{ !inputs.target }}
       uses: actions-rs/cargo@v1
