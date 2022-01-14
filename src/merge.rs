@@ -48,14 +48,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [0, 1, 2, 0, 3, 4, 5]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[macro_export]
 macro_rules! merge {
@@ -100,19 +98,19 @@ where
                                 match message {
                                     Message::Handshake(_) => {
                                         panic!("sink handshake has already occurred");
-                                    }
+                                    },
                                     Message::Data(_) => {
                                         panic!("sink must not send data");
-                                    }
+                                    },
                                     Message::Pull => {
                                         source_talkback(Message::Pull);
-                                    }
+                                    },
                                     Message::Error(ref error) => {
                                         source_talkback(Message::Error(error.clone()));
-                                    }
+                                    },
                                     Message::Terminate => {
                                         source_talkback(Message::Terminate);
-                                    }
+                                    },
                                 }
                             }
                         }
@@ -140,13 +138,13 @@ where
                                 if start_count == 1 {
                                     sink(Message::Handshake(Arc::clone(&talkback)));
                                 }
-                            }
+                            },
                             Message::Data(data) => {
                                 sink(Message::Data(data));
-                            }
+                            },
                             Message::Pull => {
                                 panic!("source must not pull");
-                            }
+                            },
                             Message::Error(error) => {
                                 ended.store(true, AtomicOrdering::Release);
                                 for j in 0..n {
@@ -158,14 +156,14 @@ where
                                     }
                                 }
                                 sink(Message::Error(error));
-                            }
+                            },
                             Message::Terminate => {
                                 source_talkbacks[i].store(None);
                                 let end_count = end_count.fetch_add(1, AtomicOrdering::AcqRel) + 1;
                                 if end_count == n {
                                     sink(Message::Terminate);
                                 }
-                            }
+                            },
                         }
                     }
                     .into(),

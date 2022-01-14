@@ -5,7 +5,7 @@ use {
     arc_swap::ArcSwapOption,
     async_executors::Timer,
     async_nursery::{NurseExt, Nursery},
-    crossbeam_queue::SegQueue,
+    crossbeam_queue::ArrayQueue,
     std::{sync::Arc, time::Duration},
     tracing::info,
     tracing_futures::Instrument,
@@ -47,8 +47,10 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
 
     let expected = [0, 1, 2, 3, 4];
     let expected = {
-        let q = SegQueue::new();
-        expected.into_iter().for_each(|item| q.push(item));
+        let q = ArrayQueue::new(expected.len());
+        for v in expected {
+            q.push(v).ok();
+        }
         Arc::new(q)
     };
 
@@ -56,7 +58,7 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                info!("down: {:?}", message);
+                info!("down: {message:?}");
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                 } else if let Message::Data(data) = message {
@@ -99,7 +101,7 @@ async fn interval_1000_can_be_disposed_before_anything_is_sent() {
             {
                 let nursery = nursery.clone();
                 move |message| {
-                    info!("down: {:?}", message);
+                    info!("down: {message:?}");
                     if let Message::Handshake(source) = message {
                         talkback.store(Some(source));
                         nursery

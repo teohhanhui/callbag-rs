@@ -37,14 +37,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [1, 3, 6, 10, 15]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn scan<I: 'static, O: 'static, F: 'static, S>(
     reducer: F,
@@ -72,36 +70,36 @@ where
                                         (move |message| match message {
                                             Message::Handshake(_) => {
                                                 panic!("sink handshake has already occurred");
-                                            }
+                                            },
                                             Message::Data(_) => {
                                                 panic!("sink must not send data");
-                                            }
+                                            },
                                             Message::Pull => {
                                                 source(Message::Pull);
-                                            }
+                                            },
                                             Message::Error(error) => {
                                                 source(Message::Error(error));
-                                            }
+                                            },
                                             Message::Terminate => {
                                                 source(Message::Terminate);
-                                            }
+                                            },
                                         })
                                         .into(),
                                     )));
-                                }
+                                },
                                 Message::Data(data) => {
                                     acc.store(Arc::new(reducer((**acc.load()).clone(), data)));
                                     sink(Message::Data((**acc.load()).clone()));
-                                }
+                                },
                                 Message::Pull => {
                                     panic!("source must not pull");
-                                }
+                                },
                                 Message::Error(error) => {
                                     sink(Message::Error(error));
-                                }
+                                },
                                 Message::Terminate => {
                                     sink(Message::Terminate);
-                                }
+                                },
                             }
                         }
                         .into(),

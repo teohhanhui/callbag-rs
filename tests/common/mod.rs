@@ -4,12 +4,26 @@ use std::sync::Arc;
 
 use callbag::{Callbag, Message};
 
-pub type MessagePredicate<I, O> = fn(&Message<I, O>) -> bool;
-
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum MessageDirection {
     FromUp,
     FromDown,
+}
+
+pub trait VariantName {
+    fn variant_name(&self) -> &'static str;
+}
+
+impl<I, O> VariantName for Message<I, O> {
+    fn variant_name(&self) -> &'static str {
+        match self {
+            Message::Handshake(_) => "Handshake",
+            Message::Data(_) => "Data",
+            Message::Pull => "Pull",
+            Message::Error(_) => "Error",
+            Message::Terminate => "Terminate",
+        }
+    }
 }
 
 /// See <https://github.com/Andarist/callbag-never/blob/cc7e20b707c597de4c0013b08b3f13baa5553544/src/index.js#L1>

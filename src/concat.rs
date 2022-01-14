@@ -39,14 +39,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     ["10", "20", "30", "a", "b"]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[macro_export]
 macro_rules! concat {
@@ -84,26 +82,29 @@ where
                     move |message| match message {
                         Message::Handshake(_) => {
                             panic!("sink handshake has already occurred");
-                        }
+                        },
                         Message::Data(_) => {
                             panic!("sink must not send data");
-                        }
+                        },
                         Message::Pull => {
                             got_pull.store(true, AtomicOrdering::Release);
                             let source_talkback = source_talkback.load();
-                            let source_talkback = source_talkback.as_ref().unwrap();
+                            let source_talkback =
+                                source_talkback.as_ref().expect("source talkback not set");
                             source_talkback(Message::Pull);
-                        }
+                        },
                         Message::Error(ref error) => {
                             let source_talkback = source_talkback.load();
-                            let source_talkback = source_talkback.as_ref().unwrap();
+                            let source_talkback =
+                                source_talkback.as_ref().expect("source talkback not set");
                             source_talkback(Message::Error(error.clone()));
-                        }
+                        },
                         Message::Terminate => {
                             let source_talkback = source_talkback.load();
-                            let source_talkback = source_talkback.as_ref().unwrap();
+                            let source_talkback =
+                                source_talkback.as_ref().expect("source talkback not set");
                             source_talkback(Message::Terminate);
-                        }
+                        },
                     }
                 }
                 .into(),
@@ -136,25 +137,27 @@ where
                                             sink(Message::Handshake(Arc::clone(&talkback)));
                                         } else if got_pull.load(AtomicOrdering::Acquire) {
                                             let source_talkback = source_talkback.load();
-                                            let source_talkback = source_talkback.as_ref().unwrap();
+                                            let source_talkback = source_talkback
+                                                .as_ref()
+                                                .expect("source talkback not set");
                                             source_talkback(Message::Pull);
                                         }
-                                    }
+                                    },
                                     Message::Data(data) => {
                                         sink(Message::Data(data));
-                                    }
+                                    },
                                     Message::Pull => {
                                         panic!("source must not pull");
-                                    }
+                                    },
                                     Message::Error(error) => {
                                         sink(Message::Error(error));
-                                    }
+                                    },
                                     Message::Terminate => {
                                         i.fetch_add(1, AtomicOrdering::AcqRel);
                                         let next_ref = next_ref.load();
                                         let next = next_ref.as_ref().unwrap();
                                         next();
-                                    }
+                                    },
                                 }
                             }
                             .into(),

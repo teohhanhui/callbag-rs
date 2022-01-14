@@ -32,14 +32,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     [1, 2, 3, 4]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn map<I: 'static, O: 'static, F: 'static, S>(f: F) -> Box<dyn Fn(S) -> Source<O>>
 where
@@ -61,35 +59,35 @@ where
                                         (move |message| match message {
                                             Message::Handshake(_) => {
                                                 panic!("sink handshake has already occurred");
-                                            }
+                                            },
                                             Message::Data(_) => {
                                                 panic!("sink must not send data");
-                                            }
+                                            },
                                             Message::Pull => {
                                                 source(Message::Pull);
-                                            }
+                                            },
                                             Message::Error(error) => {
                                                 source(Message::Error(error));
-                                            }
+                                            },
                                             Message::Terminate => {
                                                 source(Message::Terminate);
-                                            }
+                                            },
                                         })
                                         .into(),
                                     )));
-                                }
+                                },
                                 Message::Data(data) => {
                                     sink(Message::Data(f(data)));
-                                }
+                                },
                                 Message::Pull => {
                                     panic!("source must not pull");
-                                }
+                                },
                                 Message::Error(error) => {
                                     sink(Message::Error(error));
-                                }
+                                },
                                 Message::Terminate => {
                                     sink(Message::Terminate);
-                                }
+                                },
                             }
                         }
                         .into(),

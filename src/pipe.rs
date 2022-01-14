@@ -48,7 +48,7 @@
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -65,8 +65,6 @@
 ///         "X9,Y2",
 ///     ]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// Or use `pipe!` to go all the way from source to sink:
@@ -107,7 +105,7 @@
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -124,8 +122,6 @@
 ///         "X9,Y2",
 ///     ]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// # Nesting
@@ -172,7 +168,7 @@
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -189,8 +185,6 @@
 ///         "X9,Y2",
 ///     ]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// This means you can use `pipe!` to create a new operator:
@@ -237,7 +231,7 @@
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
@@ -254,8 +248,6 @@
 ///         "X9,Y2",
 ///     ]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// [`for_each`]: crate::for_each()

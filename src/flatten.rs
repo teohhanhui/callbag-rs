@@ -48,14 +48,12 @@ use crate::{Message, Source};
 ///     &{
 ///         let mut v = vec![];
 ///         for _i in 0..actual.len() {
-///             v.push(actual.pop().ok_or("unexpected empty actual")?);
+///             v.push(actual.pop().unwrap());
 ///         }
 ///         v
 ///     }[..],
 ///     ["h10", "h20", "h30", "i10", "i20", "i30"]
 /// );
-/// #
-/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// [`map`]: crate::map()
@@ -79,17 +77,17 @@ where
                     move |message| match message {
                         Message::Handshake(_) => {
                             panic!("sink handshake has already occurred");
-                        }
+                        },
                         Message::Data(_) => {
                             panic!("sink must not send data");
-                        }
+                        },
                         Message::Pull => {
                             if let Some(inner_talkback) = &*inner_talkback.load() {
                                 inner_talkback(Message::Pull);
                             } else if let Some(outer_talkback) = &*outer_talkback.load() {
                                 outer_talkback(Message::Pull);
                             }
-                        }
+                        },
                         Message::Error(_) | Message::Terminate => {
                             if let Some(inner_talkback) = &*inner_talkback.load() {
                                 inner_talkback(Message::Terminate);
@@ -97,7 +95,7 @@ where
                             if let Some(outer_talkback) = &*outer_talkback.load() {
                                 outer_talkback(Message::Terminate);
                             }
-                        }
+                        },
                     }
                 }
                 .into(),
@@ -111,7 +109,7 @@ where
                         Message::Handshake(source) => {
                             outer_talkback.store(Some(source));
                             sink(Message::Handshake(Arc::clone(&talkback)));
-                        }
+                        },
                         Message::Data(inner_source) => {
                             let inner_source: Arc<Source<T>> = inner_source.into();
                             if let Some(inner_talkback) = &*inner_talkback.load() {
@@ -122,51 +120,55 @@ where
                                     Message::Handshake(source) => {
                                         inner_talkback.store(Some(source));
                                         let inner_talkback = inner_talkback.load();
-                                        let inner_talkback = inner_talkback.as_ref().unwrap();
+                                        let inner_talkback = inner_talkback
+                                            .as_ref()
+                                            .expect("inner source talkback not set");
                                         inner_talkback(Message::Pull);
-                                    }
+                                    },
                                     Message::Data(data) => {
                                         sink(Message::Data(data));
-                                    }
+                                    },
                                     Message::Pull => {
                                         panic!("source must not pull");
-                                    }
+                                    },
                                     Message::Error(error) => {
                                         if let Some(outer_talkback) = &*outer_talkback.load() {
                                             outer_talkback(Message::Terminate);
                                         }
                                         sink(Message::Error(error));
-                                    }
+                                    },
                                     Message::Terminate => {
                                         if outer_talkback.load().is_none() {
                                             sink(Message::Terminate);
                                         } else {
                                             inner_talkback.store(None);
                                             let outer_talkback = outer_talkback.load();
-                                            let outer_talkback = outer_talkback.as_ref().unwrap();
+                                            let outer_talkback = outer_talkback
+                                                .as_ref()
+                                                .expect("outer source talkback not set");
                                             outer_talkback(Message::Pull);
                                         }
-                                    }
+                                    },
                                 })
                                 .into(),
                             )));
-                        }
+                        },
                         Message::Pull => {
                             panic!("source must not pull");
-                        }
+                        },
                         Message::Error(error) => {
                             if let Some(inner_talkback) = &*inner_talkback.load() {
                                 inner_talkback(Message::Terminate);
                             }
                             sink(Message::Error(error));
-                        }
+                        },
                         Message::Terminate => {
                             if inner_talkback.load().is_none() {
                                 sink(Message::Terminate);
                             } else {
                                 outer_talkback.store(None);
                             }
-                        }
+                        },
                     }
                 })
                 .into(),

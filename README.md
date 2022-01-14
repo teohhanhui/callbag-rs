@@ -57,14 +57,12 @@ assert_eq!(
     &{
         let mut v = vec![];
         for _i in 0..actual.len() {
-            v.push(actual.pop().ok_or("unexpected empty actual")?);
+            v.push(actual.pop().unwrap());
         }
         v
     }[..],
     [1, 3, 5, 7, 9]
 );
-
-Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 ### Iterable programming examples
@@ -122,7 +120,7 @@ assert_eq!(
     &{
         let mut v = vec![];
         for _i in 0..actual.len() {
-            v.push(actual.pop().ok_or("unexpected empty actual")?);
+            v.push(actual.pop().unwrap());
         }
         v
     }[..],
