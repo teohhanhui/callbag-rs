@@ -1,5 +1,4 @@
 use arc_swap::ArcSwapOption;
-use crossbeam_queue::ArrayQueue;
 use never::Never;
 use std::sync::{
     atomic::{AtomicUsize, Ordering as AtomicOrdering},
@@ -7,7 +6,7 @@ use std::sync::{
 };
 use tracing::info;
 
-use crate::common::VariantName;
+use crate::common::{array_queue, VariantName};
 
 use callbag::{Message, Source};
 
@@ -50,22 +49,14 @@ async fn it_concats_1_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let downwards_expected_types = ["Handshake", "Data", "Data", "Data", "Terminate"];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = [1, 2, 3];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types = Arc::new(array_queue![
+        "Handshake",
+        "Data",
+        "Data",
+        "Data",
+        "Terminate",
+    ]);
+    let downwards_expected = Arc::new(array_queue![1, 2, 3]);
 
     let source_a = {
         let source_a_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
@@ -154,7 +145,7 @@ async fn it_concats_2_async_finite_listenable_sources() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let downwards_expected_types = [
+    let downwards_expected_types = Arc::new(array_queue![
         "Handshake",
         "Data",
         "Data",
@@ -162,22 +153,8 @@ async fn it_concats_2_async_finite_listenable_sources() {
         "Data",
         "Data",
         "Terminate",
-    ];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = ["1", "2", "3", "a", "b"];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    ]);
+    let downwards_expected = Arc::new(array_queue!["1", "2", "3", "a", "b"]);
 
     let source_a = {
         let source_a_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
@@ -318,24 +295,10 @@ async fn it_concats_2_async_finite_listenable_sources() {
     wasm_bindgen_test
 )]
 fn it_concats_2_sync_finite_pullable_sources() {
-    let upwards_expected_a = ["Pull", "Pull", "Pull", "Pull"];
-    let upwards_expected_a = {
-        let q = ArrayQueue::new(upwards_expected_a.len());
-        for v in upwards_expected_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let upwards_expected_b = ["Pull", "Pull", "Pull"];
-    let upwards_expected_b = {
-        let q = ArrayQueue::new(upwards_expected_b.len());
-        for v in upwards_expected_b {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected_a = Arc::new(array_queue!["Pull", "Pull", "Pull", "Pull"]);
+    let upwards_expected_b = Arc::new(array_queue!["Pull", "Pull", "Pull"]);
 
-    let downwards_expected_types = [
+    let downwards_expected_types = Arc::new(array_queue![
         "Handshake",
         "Data",
         "Data",
@@ -343,22 +306,8 @@ fn it_concats_2_sync_finite_pullable_sources() {
         "Data",
         "Data",
         "Terminate",
-    ];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = ["10", "20", "30", "a", "b"];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    ]);
+    let downwards_expected = Arc::new(array_queue!["10", "20", "30", "a", "b"]);
 
     let source_a = {
         let sent_a = Arc::new(AtomicUsize::new(0));
@@ -526,30 +475,9 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let upwards_expected = ["Handshake", "Terminate"];
-    let upwards_expected = {
-        let q = ArrayQueue::new(upwards_expected.len());
-        for v in upwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_types = ["Handshake", "Data", "Data", "Data"];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = [10, 20, 30];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected = Arc::new(array_queue!["Handshake", "Terminate"]);
+    let downwards_expected_types = Arc::new(array_queue!["Handshake", "Data", "Data", "Data"]);
+    let downwards_expected = Arc::new(array_queue![10, 20, 30]);
 
     let make_source = {
         let nursery = nursery.clone();
@@ -660,14 +588,7 @@ async fn it_propagates_source_error_to_sink_and_doesnt_subscribe_to_next_source(
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let downwards_expected = ["Handshake", "Data", "Data", "Error"];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected = Arc::new(array_queue!["Handshake", "Data", "Data", "Error"]);
 
     let make_source = {
         let nursery = nursery.clone();

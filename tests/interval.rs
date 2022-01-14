@@ -1,11 +1,12 @@
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+use crate::common::array_queue;
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use callbag::{interval, Message};
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use {
     arc_swap::ArcSwapOption,
     async_executors::Timer,
     async_nursery::{NurseExt, Nursery},
-    crossbeam_queue::ArrayQueue,
     std::{sync::Arc, time::Duration},
     tracing::info,
     tracing_futures::Instrument,
@@ -45,14 +46,7 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let expected = [0, 1, 2, 3, 4];
-    let expected = {
-        let q = ArrayQueue::new(expected.len());
-        for v in expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let expected = Arc::new(array_queue![0, 1, 2, 3, 4]);
 
     let observe = {
         let talkback = ArcSwapOption::from(None);

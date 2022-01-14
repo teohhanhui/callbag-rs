@@ -61,8 +61,8 @@ use crate::{Message, Source};
 /// assert_eq!(
 ///     &{
 ///         let mut v = vec![];
-///         for _i in 0..actual_1.len() {
-///             v.push(actual_1.pop().unwrap());
+///         while let Some(x) = actual_1.pop() {
+///             v.push(x);
 ///         }
 ///         v
 ///     }[..],
@@ -71,8 +71,8 @@ use crate::{Message, Source};
 /// assert_eq!(
 ///     &{
 ///         let mut v = vec![];
-///         for _i in 0..actual_2.len() {
-///             v.push(actual_2.pop().unwrap());
+///         while let Some(x) = actual_2.pop() {
+///             v.push(x);
 ///         }
 ///         v
 ///     }[..],
@@ -134,8 +134,8 @@ use crate::{Message, Source};
 /// assert_eq!(
 ///     &{
 ///         let mut v = vec![];
-///         for _i in 0..actual_1.len() {
-///             v.push(actual_1.pop().unwrap());
+///         while let Some(x) = actual_1.pop() {
+///             v.push(x);
 ///         }
 ///         v
 ///     }[..],
@@ -143,8 +143,8 @@ use crate::{Message, Source};
 /// assert_eq!(
 ///     &{
 ///         let mut v = vec![];
-///         for _i in 0..actual_2.len() {
-///             v.push(actual_2.pop().unwrap());
+///         while let Some(x) = actual_2.pop() {
+///             v.push(x);
 ///         }
 ///         v
 ///     }[..],

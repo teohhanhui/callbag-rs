@@ -1,12 +1,11 @@
 use arc_swap::ArcSwapOption;
-use crossbeam_queue::ArrayQueue;
 use std::sync::{
     atomic::{AtomicUsize, Ordering as AtomicOrdering},
     Arc, RwLock,
 };
 use tracing::info;
 
-use crate::common::VariantName;
+use crate::common::{array_queue, VariantName};
 
 use callbag::{for_each, Message, Source};
 
@@ -43,22 +42,8 @@ wasm_bindgen_test_configure!(run_in_browser);
     wasm_bindgen_test
 )]
 fn it_iterates_a_finite_pullable_source() {
-    let upwards_expected = ["Pull", "Pull", "Pull"];
-    let upwards_expected = {
-        let q = ArrayQueue::new(upwards_expected.len());
-        for v in upwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = ["a", "b", "c"];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected = Arc::new(array_queue!["Pull", "Pull", "Pull"]);
+    let downwards_expected = Arc::new(array_queue!["a", "b", "c"]);
 
     let sink = for_each(move |x| {
         info!("down: {x}");
@@ -150,22 +135,8 @@ async fn it_observes_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let upwards_expected = ["Handshake", "Pull", "Pull", "Pull", "Pull"];
-    let upwards_expected = {
-        let q = ArrayQueue::new(upwards_expected.len());
-        for v in upwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = [10, 20, 30];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected = Arc::new(array_queue!["Handshake", "Pull", "Pull", "Pull", "Pull"]);
+    let downwards_expected = Arc::new(array_queue![10, 20, 30]);
 
     let make_source = {
         let nursery = nursery.clone();

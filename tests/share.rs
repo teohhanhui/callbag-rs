@@ -1,10 +1,9 @@
 use arc_swap::ArcSwapOption;
-use crossbeam_queue::ArrayQueue;
 use never::Never;
 use std::sync::{Arc, RwLock};
 use tracing::info;
 
-use crate::common::VariantName;
+use crate::common::{array_queue, VariantName};
 
 use callbag::{share, Message, Source};
 
@@ -53,48 +52,20 @@ async fn it_shares_an_async_finite_listenable_source() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let upwards_expected = ["Handshake"];
-    let upwards_expected = {
-        let q = ArrayQueue::new(upwards_expected.len());
-        for v in upwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected = Arc::new(array_queue!["Handshake"]);
 
-    let downwards_expected_types_a = ["Handshake", "Data", "Data", "Data", "Terminate"];
-    let downwards_expected_types_a = {
-        let q = ArrayQueue::new(downwards_expected_types_a.len());
-        for v in downwards_expected_types_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_a = [10, 20, 30];
-    let downwards_expected_a = {
-        let q = ArrayQueue::new(downwards_expected_a.len());
-        for v in downwards_expected_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types_a = Arc::new(array_queue![
+        "Handshake",
+        "Data",
+        "Data",
+        "Data",
+        "Terminate",
+    ]);
+    let downwards_expected_a = Arc::new(array_queue![10, 20, 30]);
 
-    let downwards_expected_types_b = ["Handshake", "Data", "Data", "Terminate"];
-    let downwards_expected_types_b = {
-        let q = ArrayQueue::new(downwards_expected_types_b.len());
-        for v in downwards_expected_types_b {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_b = [20, 30];
-    let downwards_expected_b = {
-        let q = ArrayQueue::new(downwards_expected_b.len());
-        for v in downwards_expected_b {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types_b =
+        Arc::new(array_queue!["Handshake", "Data", "Data", "Terminate"]);
+    let downwards_expected_b = Arc::new(array_queue![20, 30]);
 
     let make_source = {
         let nursery = nursery.clone();
@@ -234,48 +205,25 @@ async fn it_shares_a_pullable_source() {
     #[allow(clippy::mutex_atomic)]
     let ready_pair = Arc::new((Mutex::new(false), Condvar::new()));
 
-    let upwards_expected = ["Handshake", "Pull", "Pull", "Pull", "Pull"];
-    let upwards_expected = {
-        let q = ArrayQueue::new(upwards_expected.len());
-        for v in upwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected = Arc::new(array_queue!["Handshake", "Pull", "Pull", "Pull", "Pull"]);
 
-    let downwards_expected_types_a = ["Handshake", "Data", "Data", "Data", "Terminate"];
-    let downwards_expected_types_a = {
-        let q = ArrayQueue::new(downwards_expected_types_a.len());
-        for v in downwards_expected_types_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_a = [10, 20, 30];
-    let downwards_expected_a = {
-        let q = ArrayQueue::new(downwards_expected_a.len());
-        for v in downwards_expected_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types_a = Arc::new(array_queue![
+        "Handshake",
+        "Data",
+        "Data",
+        "Data",
+        "Terminate",
+    ]);
+    let downwards_expected_a = Arc::new(array_queue![10, 20, 30]);
 
-    let downwards_expected_types_b = ["Handshake", "Data", "Data", "Data", "Terminate"];
-    let downwards_expected_types_b = {
-        let q = ArrayQueue::new(downwards_expected_types_b.len());
-        for v in downwards_expected_types_b {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_b = [10, 20, 30];
-    let downwards_expected_b = {
-        let q = ArrayQueue::new(downwards_expected_b.len());
-        for v in downwards_expected_b {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types_b = Arc::new(array_queue![
+        "Handshake",
+        "Data",
+        "Data",
+        "Data",
+        "Terminate",
+    ]);
+    let downwards_expected_b = Arc::new(array_queue![10, 20, 30]);
 
     let make_source = {
         let ready_pair = Arc::clone(&ready_pair);
@@ -514,48 +462,14 @@ async fn it_disposes_only_when_last_sink_sends_upwards_end() {
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
     let nursery = nursery.in_current_span();
 
-    let upwards_expected = ["Handshake", "Terminate"];
-    let upwards_expected = {
-        let q = ArrayQueue::new(upwards_expected.len());
-        for v in upwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected = Arc::new(array_queue!["Handshake", "Terminate"]);
 
-    let downwards_expected_types_a = ["Handshake", "Data", "Data"];
-    let downwards_expected_types_a = {
-        let q = ArrayQueue::new(downwards_expected_types_a.len());
-        for v in downwards_expected_types_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_a = [10, 20];
-    let downwards_expected_a = {
-        let q = ArrayQueue::new(downwards_expected_a.len());
-        for v in downwards_expected_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types_a = Arc::new(array_queue!["Handshake", "Data", "Data"]);
+    let downwards_expected_a = Arc::new(array_queue![10, 20]);
 
-    let downwards_expected_types_b = ["Handshake", "Data", "Data", "Data", "Data"];
-    let downwards_expected_types_b = {
-        let q = ArrayQueue::new(downwards_expected_types_b.len());
-        for v in downwards_expected_types_b {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_b = [10, 20, 30, 40];
-    let downwards_expected_b = {
-        let q = ArrayQueue::new(downwards_expected_b.len());
-        for v in downwards_expected_b {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types_b =
+        Arc::new(array_queue!["Handshake", "Data", "Data", "Data", "Data"]);
+    let downwards_expected_b = Arc::new(array_queue![10, 20, 30, 40]);
 
     let make_source = {
         let nursery = nursery.clone();
@@ -690,31 +604,10 @@ async fn it_disposes_only_when_last_sink_sends_upwards_end() {
     wasm_bindgen_test
 )]
 fn it_can_share_a_sync_finite_listenable_source() {
-    let upwards_expected = ["Handshake"];
-    let upwards_expected = {
-        let q = ArrayQueue::new(upwards_expected.len());
-        for v in upwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected = Arc::new(array_queue!["Handshake"]);
 
-    let downwards_expected_types_a = ["Handshake", "Data", "Terminate"];
-    let downwards_expected_types_a = {
-        let q = ArrayQueue::new(downwards_expected_types_a.len());
-        for v in downwards_expected_types_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected_a = ["hi"];
-    let downwards_expected_a = {
-        let q = ArrayQueue::new(downwards_expected_a.len());
-        for v in downwards_expected_a {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types_a = Arc::new(array_queue!["Handshake", "Data", "Terminate"]);
+    let downwards_expected_a = Arc::new(array_queue!["hi"]);
 
     let make_source = move || {
         let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
@@ -778,23 +671,9 @@ fn it_can_share_a_sync_finite_listenable_source() {
     wasm_bindgen_test
 )]
 fn it_can_share_for_synchronously_requesting_sink() {
-    let upwards_expected_types = ["Handshake", "Pull"];
-    let upwards_expected_types = {
-        let q = ArrayQueue::new(upwards_expected_types.len());
-        for v in upwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let upwards_expected_types = Arc::new(array_queue!["Handshake", "Pull"]);
 
-    let downwards_expected_types = ["Handshake"];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types = Arc::new(array_queue!["Handshake"]);
 
     let make_source = move || {
         let source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));

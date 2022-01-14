@@ -50,8 +50,8 @@
 //! assert_eq!(
 //!     &{
 //!         let mut v = vec![];
-//!         for _i in 0..actual.len() {
-//!             v.push(actual.pop().unwrap());
+//!         while let Some(x) = actual.pop() {
+//!             v.push(x);
 //!         }
 //!         v
 //!     }[..],
@@ -113,8 +113,8 @@
 //! assert_eq!(
 //!     &{
 //!         let mut v = vec![];
-//!         for _i in 0..actual.len() {
-//!             v.push(actual.pop().unwrap());
+//!         while let Some(x) = actual.pop() {
+//!             v.push(x);
 //!         }
 //!         v
 //!     }[..],

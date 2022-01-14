@@ -4,6 +4,20 @@ use std::sync::Arc;
 
 use callbag::{Callbag, Message};
 
+#[allow(unused_macros)]
+macro_rules! array_queue {
+    ($($x:expr),+ $(,)?) => {{
+        let a = [$($x),+];
+        let q = ::crossbeam_queue::ArrayQueue::new(a.len());
+        for x in a {
+            q.push(x).ok();
+        }
+        q
+    }};
+}
+#[allow(unused_imports)]
+pub(crate) use array_queue;
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum MessageDirection {
     FromUp,

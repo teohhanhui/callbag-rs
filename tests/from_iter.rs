@@ -1,5 +1,5 @@
 use arc_swap::ArcSwapOption;
-use crossbeam_queue::{ArrayQueue, SegQueue};
+use crossbeam_queue::SegQueue;
 use never::Never;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
@@ -7,7 +7,7 @@ use std::sync::{
 };
 use tracing::info;
 
-use crate::common::VariantName;
+use crate::common::{array_queue, VariantName};
 
 use callbag::{from_iter, Message};
 
@@ -37,22 +37,14 @@ wasm_bindgen_test_configure!(run_in_browser);
 fn it_sends_array_items_iterable_to_a_puller_sink() {
     let source = from_iter([10, 20, 30]);
 
-    let downwards_expected_types = ["Handshake", "Data", "Data", "Data", "Terminate"];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = [10, 20, 30];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types = Arc::new(array_queue![
+        "Handshake",
+        "Data",
+        "Data",
+        "Data",
+        "Terminate",
+    ]);
+    let downwards_expected = Arc::new(array_queue![10, 20, 30]);
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
@@ -96,22 +88,14 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
 fn it_sends_array_entries_iterator_to_a_puller_sink() {
     let source = from_iter(["a", "b", "c"].into_iter().enumerate());
 
-    let downwards_expected_types = ["Handshake", "Data", "Data", "Data", "Terminate"];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
-    let downwards_expected = [(0, "a"), (1, "b"), (2, "c")];
-    let downwards_expected = {
-        let q = ArrayQueue::new(downwards_expected.len());
-        for v in downwards_expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types = Arc::new(array_queue![
+        "Handshake",
+        "Data",
+        "Data",
+        "Data",
+        "Terminate",
+    ]);
+    let downwards_expected = Arc::new(array_queue![(0, "a"), (1, "b"), (2, "c")]);
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
@@ -227,14 +211,7 @@ fn it_stops_sending_after_source_completion() {
     let source = from_iter([10, 20, 30]);
 
     let actual = Arc::new(SegQueue::new());
-    let downwards_expected_types = ["Handshake", "Data"];
-    let downwards_expected_types = {
-        let q = ArrayQueue::new(downwards_expected_types.len());
-        for v in downwards_expected_types {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let downwards_expected_types = Arc::new(array_queue!["Handshake", "Data"]);
 
     let talkback = ArcSwapOption::from(None);
     source(Message::Handshake(Arc::new(
@@ -272,8 +249,8 @@ fn it_stops_sending_after_source_completion() {
     assert_eq!(
         &{
             let mut v = vec![];
-            for _i in 0..actual.len() {
-                v.push(actual.pop().unwrap());
+            while let Some(x) = actual.pop() {
+                v.push(x);
             }
             v
         }[..],

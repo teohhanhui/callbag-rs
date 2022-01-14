@@ -1,5 +1,6 @@
-use crossbeam_queue::ArrayQueue;
 use std::sync::Arc;
+
+use crate::common::array_queue;
 
 use callbag::{filter, for_each, from_iter, map, pipe};
 
@@ -64,14 +65,7 @@ fn it_calls_first_order_functions_in_a_nested_pipe() {
     wasm_bindgen_test
 )]
 fn it_can_be_used_with_common_callbag_utilities() {
-    let expected = [1, 3];
-    let expected = {
-        let q = ArrayQueue::new(expected.len());
-        for v in expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let expected = Arc::new(array_queue![1, 3]);
     pipe!(
         from_iter([10, 20, 30, 40]),
         map(|x| x / 10),
@@ -90,14 +84,7 @@ fn it_can_be_used_with_common_callbag_utilities() {
     wasm_bindgen_test
 )]
 fn it_can_be_nested_with_callbag_utilities() {
-    let expected = [1, 3];
-    let expected = {
-        let q = ArrayQueue::new(expected.len());
-        for v in expected {
-            q.push(v).ok();
-        }
-        Arc::new(q)
-    };
+    let expected = Arc::new(array_queue![1, 3]);
     pipe!(
         from_iter([10, 20, 30, 40]),
         |s| pipe!(s, map(|x| x / 10), filter(|x| x % 2 != 0)),
