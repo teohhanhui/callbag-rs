@@ -84,7 +84,7 @@ required-features = ["filter"]
 
 [[test]]
 name = "flatten"
-required-features = ["flatten"]
+required-features = ["flatten", "map"]
 
 [[test]]
 name = "for_each"
@@ -108,7 +108,7 @@ required-features = ["merge"]
 
 [[test]]
 name = "pipe"
-required-features = ["pipe"]
+required-features = ["filter", "for_each", "from_iter", "map", "pipe"]
 
 [[test]]
 name = "scan"
