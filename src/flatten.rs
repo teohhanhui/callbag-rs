@@ -38,7 +38,7 @@ use crate::{Message, Source};
 ///     for_each({
 ///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
-///             println!("{}", x);
+///             println!("{x}");
 ///             actual.push(x.clone());
 ///         }
 ///     }),

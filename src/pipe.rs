@@ -35,7 +35,7 @@
 /// for_each({
 ///     let actual = Arc::clone(&actual);
 ///     move |x: String| {
-///         println!("{:?}", x);
+///         println!("{x}");
 ///         actual.push(x.clone());
 ///     }
 /// })(source);
@@ -91,7 +91,7 @@
 ///     for_each({
 ///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
-///             println!("{:?}", x);
+///             println!("{x}");
 ///             actual.push(x.clone());
 ///         }
 ///     }),
@@ -154,7 +154,7 @@
 ///     for_each({
 ///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
-///             println!("{:?}", x);
+///             println!("{x}");
 ///             actual.push(x.clone());
 ///         }
 ///     }),
@@ -217,7 +217,7 @@
 ///     for_each({
 ///         let actual = Arc::clone(&actual);
 ///         move |x: String| {
-///             println!("{:?}", x);
+///             println!("{x}");
 ///             actual.push(x.clone());
 ///         }
 ///     }),

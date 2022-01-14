@@ -33,7 +33,7 @@ use crate::{Message, Source};
 /// for_each({
 ///     let actual = Arc::clone(&actual);
 ///     move |x| {
-///         println!("{}", x);
+///         println!("{x}");
 ///         actual.push(x);
 ///     }
 /// })(source);
@@ -95,7 +95,7 @@ use crate::{Message, Source};
 /// for_each({
 ///     let actual = Arc::clone(&actual);
 ///     move |x| {
-///         println!("{}", x);
+///         println!("{x}");
 ///         actual.push(x);
 ///     }
 /// })(source);

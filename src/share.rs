@@ -35,7 +35,7 @@ use crate::{Message, Source};
 /// for_each({
 ///     let actual_1 = Arc::clone(&actual_1);
 ///     move |x| {
-///         println!("{}", x);
+///         println!("{x}");
 ///         actual_1.push(x);
 ///     }
 /// })(Arc::clone(&source));
@@ -48,7 +48,7 @@ use crate::{Message, Source};
 ///         async move {
 ///             nursery.sleep(DURATION).await;
 ///             for_each(move |x| {
-///                 println!("{}", x);
+///                 println!("{x}");
 ///                 actual_2.push(x);
 ///             })(source);
 ///         }
