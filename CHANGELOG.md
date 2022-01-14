@@ -2,9 +2,12 @@
 
 ##  Unreleased
 
+##  v0.14.0 - 2022-01-14
+
 ### Changed
 
 -   Accept `Source<T>` and `Box<Source<T>>` in addition to `Arc<Source<T>>` in `combine` operator
+-   Emit `Message::Error(_)` in `interval` function if `Nursery::nurse` call errors
 
 ### Breaking changes
 
