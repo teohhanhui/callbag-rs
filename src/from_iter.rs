@@ -6,7 +6,16 @@ use std::{
     },
 };
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Converts an [iterable][`IntoIterator`] or [`Iterator`] to a callbag pullable source.
 ///
@@ -79,13 +88,29 @@ use crate::{Message, Source};
 ///     [(0, 10), (1, 20), (2, 30), (3, 40)]
 /// );
 /// ```
-pub fn from_iter<T: 'static, I: 'static>(iter: I) -> Source<T>
+#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+pub fn from_iter<
+    #[cfg(not(feature = "trace"))] T: 'static,
+    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "trace"))] I: 'static,
+    #[cfg(feature = "trace")] I: fmt::Debug + 'static,
+>(
+    iter: I,
+) -> Source<T>
 where
     T: Send + Sync,
-    I: IntoIterator<Item = T> + Send + Sync + Clone,
+    I: IntoIterator<Item = T> + Clone + Send + Sync,
     <I as IntoIterator>::IntoIter: Send + Sync,
 {
+    #[cfg(feature = "trace")]
+    let from_iter_fn_span = Span::current();
     (move |message| {
+        instrument!(
+            follows_from: &from_iter_fn_span,
+            "from_iter",
+            from_iter_span
+        );
+        trace!("from sink: {message:?}");
         if let Message::Handshake(sink) = message {
             let iter = Arc::new(RwLock::new(iter.clone().into_iter()));
             let in_loop = Arc::new(AtomicBool::new(false));
@@ -112,47 +137,57 @@ where
                             res_done.store(res.is_none(), AtomicOrdering::Release);
                         }
                         if res_done.load(AtomicOrdering::Acquire) {
-                            sink(Message::Terminate);
+                            call!(sink, Message::Terminate, "to sink: {message:?}");
                             break;
                         } else {
                             let res = {
                                 let res = &mut *res.write().unwrap();
                                 res.take().unwrap()
                             };
-                            sink(Message::Data(res));
+                            call!(sink, Message::Data(res), "to sink: {message:?}");
                         }
                     }
                     in_loop.store(false, AtomicOrdering::Release);
                 }
             };
-            sink(Message::Handshake(Arc::new(
-                (move |message| {
-                    if completed.load(AtomicOrdering::Acquire) {
-                        return;
-                    }
-
-                    match message {
-                        Message::Handshake(_) => {
-                            panic!("sink handshake has already occurred");
-                        },
-                        Message::Data(_) => {
-                            panic!("sink must not send data");
-                        },
-                        Message::Pull => {
-                            got_pull.store(true, AtomicOrdering::Release);
-                            if !in_loop.load(AtomicOrdering::Acquire)
-                                && !res_done.load(AtomicOrdering::Acquire)
-                            {
-                                r#loop();
+            call!(
+                sink,
+                Message::Handshake(Arc::new(
+                    {
+                        #[cfg(feature = "trace")]
+                        let from_iter_span = from_iter_span.clone();
+                        move |message| {
+                            instrument!(parent: &from_iter_span, "sink_talkback");
+                            trace!("from sink: {message:?}");
+                            if completed.load(AtomicOrdering::Acquire) {
+                                return;
                             }
-                        },
-                        Message::Error(_) | Message::Terminate => {
-                            completed.store(true, AtomicOrdering::Release);
-                        },
+
+                            match message {
+                                Message::Handshake(_) => {
+                                    panic!("sink handshake has already occurred");
+                                },
+                                Message::Data(_) => {
+                                    panic!("sink must not send data");
+                                },
+                                Message::Pull => {
+                                    got_pull.store(true, AtomicOrdering::Release);
+                                    if !in_loop.load(AtomicOrdering::Acquire)
+                                        && !res_done.load(AtomicOrdering::Acquire)
+                                    {
+                                        r#loop();
+                                    }
+                                },
+                                Message::Error(_) | Message::Terminate => {
+                                    completed.store(true, AtomicOrdering::Release);
+                                },
+                            }
+                        }
                     }
-                })
-                .into(),
-            )));
+                    .into(),
+                )),
+                "to sink: {message:?}"
+            );
         }
     })
     .into()

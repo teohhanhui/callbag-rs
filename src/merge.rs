@@ -4,7 +4,16 @@ use std::sync::{
     Arc,
 };
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Callbag factory that merges data from multiple callbag sources.
 ///
@@ -68,13 +77,25 @@ macro_rules! merge {
 /// designed for listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/readme.js#L29-L60>
+#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
 #[doc(hidden)]
-pub fn merge<T: 'static, S: 'static>(sources: Box<[S]>) -> Source<T>
+pub fn merge<
+    #[cfg(not(feature = "trace"))] T: 'static,
+    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "trace"))] S: 'static,
+    #[cfg(feature = "trace")] S: fmt::Debug + 'static,
+>(
+    sources: Box<[S]>,
+) -> Source<T>
 where
     S: Into<Arc<Source<T>>> + Send + Sync,
 {
+    #[cfg(feature = "trace")]
+    let merge_fn_span = Span::current();
     let sources: Box<[Arc<Source<T>>]> = Vec::from(sources).into_iter().map(|s| s.into()).collect();
     (move |message| {
+        instrument!(follows_from: &merge_fn_span, "merge", merge_span);
+        trace!("from sink: {message:?}");
         if let Message::Handshake(sink) = message {
             let n = sources.len();
             let source_talkbacks: Arc<Vec<ArcSwapOption<Source<T>>>> = Arc::new({
@@ -87,9 +108,13 @@ where
             let ended = Arc::new(AtomicBool::new(false));
             let talkback: Arc<Source<T>> = Arc::new(
                 {
+                    #[cfg(feature = "trace")]
+                    let merge_span = merge_span.clone();
                     let source_talkbacks = Arc::clone(&source_talkbacks);
                     let ended = Arc::clone(&ended);
                     move |message| {
+                        instrument!(parent: &merge_span, "sink_talkback");
+                        trace!("from sink: {message:?}");
                         if let Message::Error(_) | Message::Terminate = message {
                             ended.store(true, AtomicOrdering::Release);
                         }
@@ -103,13 +128,25 @@ where
                                         panic!("sink must not send data");
                                     },
                                     Message::Pull => {
-                                        source_talkback(Message::Pull);
+                                        call!(
+                                            source_talkback,
+                                            Message::Pull,
+                                            "to source: {message:?}"
+                                        );
                                     },
                                     Message::Error(ref error) => {
-                                        source_talkback(Message::Error(error.clone()));
+                                        call!(
+                                            source_talkback,
+                                            Message::Error(Arc::clone(error)),
+                                            "to source: {message:?}"
+                                        );
                                     },
                                     Message::Terminate => {
-                                        source_talkback(Message::Terminate);
+                                        call!(
+                                            source_talkback,
+                                            Message::Terminate,
+                                            "to source: {message:?}"
+                                        );
                                     },
                                 }
                             }
@@ -122,52 +159,72 @@ where
                 if ended.load(AtomicOrdering::Acquire) {
                     return;
                 }
-                sources[i](Message::Handshake(Arc::new(
-                    {
-                        let sink = Arc::clone(&sink);
-                        let source_talkbacks = Arc::clone(&source_talkbacks);
-                        let start_count = Arc::clone(&start_count);
-                        let end_count = Arc::clone(&end_count);
-                        let ended = Arc::clone(&ended);
-                        let talkback = Arc::clone(&talkback);
-                        move |message| match message {
-                            Message::Handshake(source) => {
-                                source_talkbacks[i].store(Some(source));
-                                let start_count =
-                                    start_count.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                if start_count == 1 {
-                                    sink(Message::Handshake(Arc::clone(&talkback)));
-                                }
-                            },
-                            Message::Data(data) => {
-                                sink(Message::Data(data));
-                            },
-                            Message::Pull => {
-                                panic!("source must not pull");
-                            },
-                            Message::Error(error) => {
-                                ended.store(true, AtomicOrdering::Release);
-                                for j in 0..n {
-                                    if j != i {
-                                        if let Some(source_talkback) = &*source_talkbacks[j].load()
-                                        {
-                                            source_talkback(Message::Terminate);
+                call!(
+                    sources[i],
+                    Message::Handshake(Arc::new(
+                        {
+                            #[cfg(feature = "trace")]
+                            let merge_span = merge_span.clone();
+                            let sink = Arc::clone(&sink);
+                            let source_talkbacks = Arc::clone(&source_talkbacks);
+                            let start_count = Arc::clone(&start_count);
+                            let end_count = Arc::clone(&end_count);
+                            let ended = Arc::clone(&ended);
+                            let talkback = Arc::clone(&talkback);
+                            move |message| {
+                                instrument!(parent: &merge_span, "source_talkback");
+                                trace!("from source: {message:?}");
+                                match message {
+                                    Message::Handshake(source) => {
+                                        source_talkbacks[i].store(Some(source));
+                                        let start_count =
+                                            start_count.fetch_add(1, AtomicOrdering::AcqRel) + 1;
+                                        if start_count == 1 {
+                                            call!(
+                                                sink,
+                                                Message::Handshake(Arc::clone(&talkback)),
+                                                "to sink: {message:?}"
+                                            );
                                         }
-                                    }
+                                    },
+                                    Message::Data(data) => {
+                                        call!(sink, Message::Data(data), "to sink: {message:?}");
+                                    },
+                                    Message::Pull => {
+                                        panic!("source must not pull");
+                                    },
+                                    Message::Error(error) => {
+                                        ended.store(true, AtomicOrdering::Release);
+                                        for j in 0..n {
+                                            if j != i {
+                                                if let Some(source_talkback) =
+                                                    &*source_talkbacks[j].load()
+                                                {
+                                                    call!(
+                                                        source_talkback,
+                                                        Message::Terminate,
+                                                        "to source: {message:?}"
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        call!(sink, Message::Error(error), "to sink: {message:?}");
+                                    },
+                                    Message::Terminate => {
+                                        source_talkbacks[i].store(None);
+                                        let end_count =
+                                            end_count.fetch_add(1, AtomicOrdering::AcqRel) + 1;
+                                        if end_count == n {
+                                            call!(sink, Message::Terminate, "to sink: {message:?}");
+                                        }
+                                    },
                                 }
-                                sink(Message::Error(error));
-                            },
-                            Message::Terminate => {
-                                source_talkbacks[i].store(None);
-                                let end_count = end_count.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                if end_count == n {
-                                    sink(Message::Terminate);
-                                }
-                            },
+                            }
                         }
-                    }
-                    .into(),
-                )));
+                        .into(),
+                    )),
+                    "to source: {message:?}"
+                );
             }
         }
     })

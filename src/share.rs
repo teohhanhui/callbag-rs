@@ -2,7 +2,16 @@ use arc_swap::{ArcSwap, ArcSwapOption};
 use never::Never;
 use std::{iter, sync::Arc};
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Callbag operator that broadcasts a single source to multiple sinks.
 ///
@@ -155,16 +164,28 @@ use crate::{Message, Source};
 /// ```
 ///
 /// [rxjs-share]: https://rxjs.dev/api/operators/share
-pub fn share<T: 'static, S>(source: S) -> Source<T>
+#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+pub fn share<
+    #[cfg(not(feature = "trace"))] T: 'static,
+    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "trace"))] S,
+    #[cfg(feature = "trace")] S: fmt::Debug,
+>(
+    source: S,
+) -> Source<T>
 where
     T: Clone,
     S: Into<Arc<Source<T>>>,
 {
+    #[cfg(feature = "trace")]
+    let share_fn_span = Span::current();
     let source: Arc<Source<T>> = source.into();
     let sinks = Arc::new(ArcSwap::from_pointee(vec![]));
     let source_talkback: Arc<ArcSwapOption<Source<T>>> = Arc::new(ArcSwapOption::from(None));
 
     (move |message| {
+        instrument!(follows_from: &share_fn_span, "share", share_span);
+        trace!("from sink: {message:?}");
         let sinks = Arc::clone(&sinks);
         let source_talkback = Arc::clone(&source_talkback);
         if let Message::Handshake(sink) = message {
@@ -182,68 +203,89 @@ where
                     let sinks = Arc::clone(&sinks);
                     let source_talkback = Arc::clone(&source_talkback);
                     let sink = Arc::clone(&sink);
-                    move |message| match message {
-                        Message::Handshake(_) => {
-                            panic!("sink handshake has already occurred");
-                        },
-                        Message::Data(_) => {
-                            panic!("sink must not send data");
-                        },
-                        Message::Pull => {
-                            let source_talkback = source_talkback.load();
-                            let source_talkback =
-                                source_talkback.as_ref().expect("source talkback not set");
-                            source_talkback(Message::Pull);
-                        },
-                        Message::Error(_) | Message::Terminate => {
-                            {
-                                let i = sinks.load().iter().position({
-                                    let sink = Arc::clone(&sink);
-                                    move |s| Arc::ptr_eq(s, &sink)
-                                });
-                                if let Some(i) = i {
-                                    sinks.rcu(move |sinks| {
-                                        let mut sinks = (**sinks).clone();
-                                        sinks.splice(i..i + 1, iter::empty());
-                                        sinks
-                                    });
-                                }
+                    {
+                        #[cfg(feature = "trace")]
+                        let share_span = share_span.clone();
+                        move |message| {
+                            instrument!(parent: &share_span, "sink_talkback");
+                            trace!("from sink: {message:?}");
+                            match message {
+                                Message::Handshake(_) => {
+                                    panic!("sink handshake has already occurred");
+                                },
+                                Message::Data(_) => {
+                                    panic!("sink must not send data");
+                                },
+                                Message::Pull => {
+                                    let source_talkback = source_talkback.load();
+                                    let source_talkback =
+                                        source_talkback.as_ref().expect("source talkback not set");
+                                    call!(source_talkback, Message::Pull, "to source: {message:?}");
+                                },
+                                Message::Error(_) | Message::Terminate => {
+                                    {
+                                        let i = sinks.load().iter().position({
+                                            let sink = Arc::clone(&sink);
+                                            move |s| Arc::ptr_eq(s, &sink)
+                                        });
+                                        if let Some(i) = i {
+                                            sinks.rcu(move |sinks| {
+                                                let mut sinks = (**sinks).clone();
+                                                sinks.splice(i..i + 1, iter::empty());
+                                                sinks
+                                            });
+                                        }
+                                    }
+                                    if sinks.load().is_empty() {
+                                        let source_talkback = source_talkback.load();
+                                        let source_talkback = source_talkback
+                                            .as_ref()
+                                            .expect("source talkback not set");
+                                        call!(
+                                            source_talkback,
+                                            Message::Terminate,
+                                            "to source: {message:?}"
+                                        );
+                                    }
+                                },
                             }
-                            if sinks.load().is_empty() {
-                                let source_talkback = source_talkback.load();
-                                let source_talkback =
-                                    source_talkback.as_ref().expect("source talkback not set");
-                                source_talkback(Message::Terminate);
-                            }
-                        },
+                        }
                     }
                 }
                 .into(),
             );
 
             if sinks.load().len() == 1 {
-                source(Message::Handshake(Arc::new(
-                    {
-                        move |message: Message<T, Never>| {
-                            if let Message::Handshake(source) = message.clone() {
-                                source_talkback.store(Some(source));
-                                sink(Message::Handshake(Arc::clone(&talkback)));
-                            } else {
-                                for s in &**sinks.load() {
-                                    s(message.clone());
+                call!(
+                    source,
+                    Message::Handshake(Arc::new(
+                        {
+                            move |message: Message<T, Never>| {
+                                if let Message::Handshake(source) = message.clone() {
+                                    source_talkback.store(Some(source));
+                                    call!(
+                                        sink,
+                                        Message::Handshake(Arc::clone(&talkback)),
+                                        "to sink: {message:?}"
+                                    );
+                                } else {
+                                    for s in &**sinks.load() {
+                                        call!(s, message.clone(), "to sink: {message:?}");
+                                    }
+                                }
+                                if let Message::Error(_) | Message::Terminate = message {
+                                    sinks.store(Arc::new(vec![]));
                                 }
                             }
-                            if let Message::Error(_) | Message::Terminate = message {
-                                sinks.store(Arc::new(vec![]));
-                            }
                         }
-                    }
-                    .into(),
-                )));
+                        .into(),
+                    )),
+                    "to source: {message:?}"
+                );
                 return;
             }
 
-            sink(Message::Handshake(talkback));
+            call!(sink, Message::Handshake(talkback), "to sink: {message:?}");
         }
     })
     .into()

@@ -4,7 +4,16 @@ use std::sync::{
     Arc,
 };
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Callbag operator that skips the first N data points of a source.
 ///
@@ -111,80 +120,158 @@ use crate::{Message, Source};
 ///     [14, 15, 16, 17, 18, 19, 20]
 /// );
 /// ```
-pub fn skip<T: 'static, S>(max: usize) -> Box<dyn Fn(S) -> Source<T>>
+#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+pub fn skip<
+    #[cfg(not(feature = "trace"))] T: 'static,
+    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    S,
+>(
+    max: usize,
+) -> Box<dyn Fn(S) -> Source<T>>
 where
     S: Into<Arc<Source<T>>>,
 {
+    #[cfg(feature = "trace")]
+    let skip_fn_span = Span::current();
     Box::new(move |source| {
+        #[cfg(feature = "trace")]
+        let _skip_fn_entered = skip_fn_span.enter();
         let source: Arc<Source<T>> = source.into();
-        (move |message| {
-            if let Message::Handshake(sink) = message {
-                let skipped = Arc::new(AtomicUsize::new(0));
-                let talkback: Arc<ArcSwapOption<Source<T>>> = Arc::new(ArcSwapOption::from(None));
-                source(Message::Handshake(Arc::new(
-                    (move |message| match message {
-                        Message::Handshake(source) => {
-                            talkback.store(Some(source));
-                            sink(Message::Handshake(Arc::new(
-                                {
-                                    let talkback = Arc::clone(&talkback);
-                                    move |message| match message {
-                                        Message::Handshake(_) => {
-                                            panic!("sink handshake has already occurred");
+        {
+            #[cfg(feature = "trace")]
+            let skip_fn_span = skip_fn_span.clone();
+            move |message| {
+                instrument!(follows_from: &skip_fn_span, "skip", skip_span);
+                trace!("from sink: {message:?}");
+                if let Message::Handshake(sink) = message {
+                    let skipped = Arc::new(AtomicUsize::new(0));
+                    let talkback: Arc<ArcSwapOption<Source<T>>> =
+                        Arc::new(ArcSwapOption::from(None));
+                    call!(
+                        source,
+                        Message::Handshake(Arc::new(
+                            {
+                                #[cfg(feature = "trace")]
+                                let skip_span = skip_span.clone();
+                                move |message| {
+                                    instrument!(parent: &skip_span, "source_talkback");
+                                    trace!("from source: {message:?}");
+                                    match message {
+                                        Message::Handshake(source) => {
+                                            talkback.store(Some(source));
+                                            call!(
+                                                sink,
+                                                Message::Handshake(Arc::new(
+                                                    {
+                                                        #[cfg(feature = "trace")]
+                                                        let skip_span = skip_span.clone();
+                                                        let talkback = Arc::clone(&talkback);
+                                                        move |message| {
+                                                            instrument!(
+                                                                parent: &skip_span,
+                                                                "sink_talkback"
+                                                            );
+                                                            trace!("from sink: {message:?}");
+                                                            match message {
+                                                                Message::Handshake(_) => {
+                                                                    panic!(
+                                                                        "sink handshake has \
+                                                                        already occurred"
+                                                                    );
+                                                                },
+                                                                Message::Data(_) => {
+                                                                    panic!(
+                                                                        "sink must not send data"
+                                                                    );
+                                                                },
+                                                                Message::Pull => {
+                                                                    let talkback = talkback.load();
+                                                                    let source =
+                                                                        talkback.as_ref().expect(
+                                                                            "source talkback not \
+                                                                             set",
+                                                                        );
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Pull,
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                                Message::Error(error) => {
+                                                                    let talkback = talkback.load();
+                                                                    let source =
+                                                                        talkback.as_ref().expect(
+                                                                            "source talkback not \
+                                                                             set",
+                                                                        );
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Error(error),
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                                Message::Terminate => {
+                                                                    let talkback = talkback.load();
+                                                                    let source =
+                                                                        talkback.as_ref().expect(
+                                                                            "source talkback not \
+                                                                             set",
+                                                                        );
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Terminate,
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                            }
+                                                        }
+                                                    }
+                                                    .into(),
+                                                )),
+                                                "to sink: {message:?}"
+                                            );
                                         },
-                                        Message::Data(_) => {
-                                            panic!("sink must not send data");
+                                        Message::Data(data) => {
+                                            if skipped.load(AtomicOrdering::Acquire) < max {
+                                                skipped.fetch_add(1, AtomicOrdering::AcqRel);
+                                                {
+                                                    let talkback = talkback.load();
+                                                    let talkback = talkback
+                                                        .as_ref()
+                                                        .expect("source talkback not set");
+                                                    call!(
+                                                        talkback,
+                                                        Message::Pull,
+                                                        "to source: {message:?}"
+                                                    );
+                                                }
+                                            } else {
+                                                sink(Message::Data(data));
+                                            }
                                         },
                                         Message::Pull => {
-                                            let talkback = talkback.load();
-                                            let source =
-                                                talkback.as_ref().expect("source talkback not set");
-                                            source(Message::Pull);
+                                            panic!("source must not pull");
                                         },
                                         Message::Error(error) => {
-                                            let talkback = talkback.load();
-                                            let source =
-                                                talkback.as_ref().expect("source talkback not set");
-                                            source(Message::Error(error));
+                                            call!(
+                                                sink,
+                                                Message::Error(error),
+                                                "to sink: {message:?}"
+                                            );
                                         },
                                         Message::Terminate => {
-                                            let talkback = talkback.load();
-                                            let source =
-                                                talkback.as_ref().expect("source talkback not set");
-                                            source(Message::Terminate);
+                                            call!(sink, Message::Terminate, "to sink: {message:?}");
                                         },
                                     }
                                 }
-                                .into(),
-                            )));
-                        },
-                        Message::Data(data) => {
-                            if skipped.load(AtomicOrdering::Acquire) < max {
-                                skipped.fetch_add(1, AtomicOrdering::AcqRel);
-                                {
-                                    let talkback = talkback.load();
-                                    let talkback =
-                                        talkback.as_ref().expect("source talkback not set");
-                                    talkback(Message::Pull);
-                                }
-                            } else {
-                                sink(Message::Data(data));
                             }
-                        },
-                        Message::Pull => {
-                            panic!("source must not pull");
-                        },
-                        Message::Error(error) => {
-                            sink(Message::Error(error));
-                        },
-                        Message::Terminate => {
-                            sink(Message::Terminate);
-                        },
-                    })
-                    .into(),
-                )))
+                            .into(),
+                        )),
+                        "to source: {message:?}"
+                    );
+                }
             }
-        })
+        }
         .into()
     })
 }

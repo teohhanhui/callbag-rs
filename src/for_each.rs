@@ -1,7 +1,16 @@
 use arc_swap::ArcSwapOption;
 use std::sync::Arc;
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Callbag sink that consumes both pullable and listenable sources.
 ///
@@ -83,38 +92,60 @@ use crate::{Message, Source};
 ///     [0, 1, 2, 3]
 /// );
 /// ```
-pub fn for_each<T: 'static, F: 'static, S>(f: F) -> Box<dyn Fn(S)>
+#[cfg_attr(feature = "trace", tracing::instrument(level = "trace", skip(f)))]
+pub fn for_each<
+    #[cfg(not(feature = "trace"))] T: 'static,
+    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    F: 'static,
+    S,
+>(
+    f: F,
+) -> Box<dyn Fn(S)>
 where
-    F: Fn(T) + Send + Sync + Clone,
+    F: Fn(T) + Clone + Send + Sync,
     S: Into<Arc<Source<T>>>,
 {
+    #[cfg(feature = "trace")]
+    let for_each_fn_span = Span::current();
     Box::new(move |source| {
+        #[cfg(feature = "trace")]
+        let _for_each_fn_entered = for_each_fn_span.enter();
         let source: Arc<Source<T>> = source.into();
         let talkback = ArcSwapOption::from(None);
-        source(Message::Handshake(Arc::new(
-            {
-                let f = f.clone();
-                move |message| match message {
-                    Message::Handshake(source) => {
-                        talkback.store(Some(source));
-                        let talkback = talkback.load();
-                        let talkback = talkback.as_ref().expect("source talkback not set");
-                        talkback(Message::Pull);
-                    },
-                    Message::Data(data) => {
-                        f(data);
-                        let talkback = talkback.load();
-                        let talkback = talkback.as_ref().expect("source talkback not set");
-                        talkback(Message::Pull);
-                    },
-                    Message::Pull => {
-                        panic!("source must not pull");
-                    },
-                    Message::Error(_) => {},
-                    Message::Terminate => {},
+        call!(
+            source,
+            Message::Handshake(Arc::new(
+                {
+                    let f = f.clone();
+                    #[cfg(feature = "trace")]
+                    let for_each_fn_span = for_each_fn_span.clone();
+                    move |message| {
+                        instrument!(follows_from: &for_each_fn_span, "for_each", for_each_span);
+                        trace!("from source: {message:?}");
+                        match message {
+                            Message::Handshake(source) => {
+                                talkback.store(Some(source));
+                                let talkback = talkback.load();
+                                let talkback = talkback.as_ref().expect("source talkback not set");
+                                call!(talkback, Message::Pull, "to source: {message:?}");
+                            },
+                            Message::Data(data) => {
+                                f(data);
+                                let talkback = talkback.load();
+                                let talkback = talkback.as_ref().expect("source talkback not set");
+                                call!(talkback, Message::Pull, "to source: {message:?}");
+                            },
+                            Message::Pull => {
+                                panic!("source must not pull");
+                            },
+                            Message::Error(_) => {},
+                            Message::Terminate => {},
+                        }
+                    }
                 }
-            }
-            .into(),
-        )));
+                .into(),
+            )),
+            "to source: {message:?}"
+        );
     })
 }

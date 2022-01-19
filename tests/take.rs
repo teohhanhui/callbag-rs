@@ -4,9 +4,12 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering as AtomicOrdering},
     Arc,
 };
-use tracing::info;
+use tracing::{info, Span};
 
-use crate::common::{array_queue, VariantName};
+use crate::{
+    common::{array_queue, VariantName},
+    utils::{call, tracing::instrument},
+};
 
 use callbag::{take, Message, Source};
 
@@ -18,6 +21,7 @@ use {
         sync::{atomic::AtomicBool, RwLock},
         time::Duration,
     },
+    tracing::info_span,
     tracing_futures::Instrument,
 };
 
@@ -30,6 +34,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 pub mod common;
+pub mod utils;
 
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -49,8 +54,8 @@ wasm_bindgen_test_configure!(run_in_browser);
     wasm_bindgen_test
 )]
 async fn it_takes_from_a_pullable_source() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let upwards_expected = Arc::new(array_queue![
         "Handshake",
@@ -69,6 +74,7 @@ async fn it_takes_from_a_pullable_source() {
     let downwards_expected = Arc::new(array_queue![10, 20, 30]);
 
     let make_source = {
+        let test_fn_span = test_fn_span.clone();
         let nursery = nursery.clone();
         move || {
             let sink_ref = Arc::new(ArcSwapOption::from(None));
@@ -78,7 +84,8 @@ async fn it_takes_from_a_pullable_source() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message: Message<Never, _>| {
-                        info!("up: {message:?}");
+                        instrument!(parent: &test_fn_span, "source", source_span);
+                        info!("from sink: {message:?}");
                         {
                             let e = upwards_expected.pop().unwrap();
                             assert_eq!(message.variant_name(), e, "upwards type is expected: {e}");
@@ -92,7 +99,7 @@ async fn it_takes_from_a_pullable_source() {
                                 let source_ref = &mut *source_ref.write().unwrap();
                                 source_ref.take().unwrap()
                             };
-                            sink_ref(Message::Handshake(source));
+                            call!(sink_ref, Message::Handshake(source), "to sink: {message:?}");
                             return;
                         } else if let Message::Pull = message {
                         } else {
@@ -101,79 +108,124 @@ async fn it_takes_from_a_pullable_source() {
 
                         if sent.load(AtomicOrdering::Acquire) == 0 {
                             sent.fetch_add(1, AtomicOrdering::AcqRel);
-                            nursery
-                                .nurse({
-                                    let sink_ref = Arc::clone(&sink_ref);
-                                    async move {
-                                        let sink_ref = sink_ref.load();
-                                        let sink_ref = sink_ref.as_ref().unwrap();
-                                        sink_ref(Message::Data(10));
-                                    }
-                                })
-                                .unwrap();
+                            {
+                                let nursery = nursery
+                                    .clone()
+                                    .instrument(info_span!(parent: &source_span, "async_task"));
+                                nursery
+                                    .nurse({
+                                        let sink_ref = Arc::clone(&sink_ref);
+                                        async move {
+                                            let sink_ref = sink_ref.load();
+                                            let sink_ref = sink_ref.as_ref().unwrap();
+                                            call!(
+                                                sink_ref,
+                                                Message::Data(10),
+                                                "to sink: {message:?}"
+                                            );
+                                        }
+                                    })
+                                    .unwrap();
+                            }
                             return;
                         }
                         if sent.load(AtomicOrdering::Acquire) == 1 {
                             sent.fetch_add(1, AtomicOrdering::AcqRel);
-                            nursery
-                                .nurse({
-                                    let sink_ref = Arc::clone(&sink_ref);
-                                    async move {
-                                        let sink_ref = sink_ref.load();
-                                        let sink_ref = sink_ref.as_ref().unwrap();
-                                        sink_ref(Message::Data(20));
-                                    }
-                                })
-                                .unwrap();
+                            {
+                                let nursery = nursery
+                                    .clone()
+                                    .instrument(info_span!(parent: &source_span, "async_task"));
+                                nursery
+                                    .nurse({
+                                        let sink_ref = Arc::clone(&sink_ref);
+                                        async move {
+                                            let sink_ref = sink_ref.load();
+                                            let sink_ref = sink_ref.as_ref().unwrap();
+                                            call!(
+                                                sink_ref,
+                                                Message::Data(20),
+                                                "to sink: {message:?}"
+                                            );
+                                        }
+                                    })
+                                    .unwrap();
+                            }
                             return;
                         }
                         if sent.load(AtomicOrdering::Acquire) == 2 {
                             sent.fetch_add(1, AtomicOrdering::AcqRel);
-                            nursery
-                                .nurse({
-                                    let sink_ref = Arc::clone(&sink_ref);
-                                    async move {
-                                        let sink_ref = sink_ref.load();
-                                        let sink_ref = sink_ref.as_ref().unwrap();
-                                        sink_ref(Message::Data(30));
-                                    }
-                                })
-                                .unwrap();
+                            {
+                                let nursery = nursery
+                                    .clone()
+                                    .instrument(info_span!(parent: &source_span, "async_task"));
+                                nursery
+                                    .nurse({
+                                        let sink_ref = Arc::clone(&sink_ref);
+                                        async move {
+                                            let sink_ref = sink_ref.load();
+                                            let sink_ref = sink_ref.as_ref().unwrap();
+                                            call!(
+                                                sink_ref,
+                                                Message::Data(30),
+                                                "to sink: {message:?}"
+                                            );
+                                        }
+                                    })
+                                    .unwrap();
+                            }
                             return;
                         }
                         if sent.load(AtomicOrdering::Acquire) == 3 {
                             sent.fetch_add(1, AtomicOrdering::AcqRel);
-                            nursery
-                                .nurse({
-                                    let sink_ref = Arc::clone(&sink_ref);
-                                    async move {
-                                        let sink_ref = sink_ref.load();
-                                        let sink_ref = sink_ref.as_ref().unwrap();
-                                        sink_ref(Message::Data(40));
-                                    }
-                                })
-                                .unwrap();
+                            {
+                                let nursery = nursery
+                                    .clone()
+                                    .instrument(info_span!(parent: &source_span, "async_task"));
+                                nursery
+                                    .nurse({
+                                        let sink_ref = Arc::clone(&sink_ref);
+                                        async move {
+                                            let sink_ref = sink_ref.load();
+                                            let sink_ref = sink_ref.as_ref().unwrap();
+                                            call!(
+                                                sink_ref,
+                                                Message::Data(40),
+                                                "to sink: {message:?}"
+                                            );
+                                        }
+                                    })
+                                    .unwrap();
+                            }
                             return;
                         }
                         if sent.load(AtomicOrdering::Acquire) == 4 {
                             sent.fetch_add(1, AtomicOrdering::AcqRel);
-                            nursery
-                                .nurse({
-                                    let sink_ref = Arc::clone(&sink_ref);
-                                    async move {
-                                        let sink_ref = sink_ref.load();
-                                        let sink_ref = sink_ref.as_ref().unwrap();
-                                        sink_ref(Message::Data(50));
-                                    }
-                                })
-                                .unwrap();
+                            {
+                                let nursery = nursery
+                                    .clone()
+                                    .instrument(info_span!(parent: &source_span, "async_task"));
+                                nursery
+                                    .nurse({
+                                        let sink_ref = Arc::clone(&sink_ref);
+                                        async move {
+                                            let sink_ref = sink_ref.load();
+                                            let sink_ref = sink_ref.as_ref().unwrap();
+                                            call!(
+                                                sink_ref,
+                                                Message::Data(50),
+                                                "to sink: {message:?}"
+                                            );
+                                        }
+                                    })
+                                    .unwrap();
+                            }
                             return;
                         }
                         if sent.load(AtomicOrdering::Acquire) == 5 {
                             sent.fetch_add(1, AtomicOrdering::AcqRel);
                             let sink_ref = sink_ref.load();
                             let sink_ref = sink_ref.as_ref().unwrap();
-                            sink_ref(Message::Terminate);
+                            call!(sink_ref, Message::Terminate, "to sink: {message:?}");
                         }
                     }
                 }
@@ -191,7 +243,8 @@ async fn it_takes_from_a_pullable_source() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message: Message<_, Never>| {
-                info!("down: {message:?}");
+                instrument!(parent: &test_fn_span, "sink");
+                info!("from source: {message:?}");
                 {
                     let et = downwards_expected_types.pop().unwrap();
                     assert_eq!(
@@ -204,7 +257,7 @@ async fn it_takes_from_a_pullable_source() {
                     talkback.store(Some(source));
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
+                    call!(talkback, Message::Pull, "from source: {message:?}");
                 } else if let Message::Data(data) = message {
                     {
                         let e = downwards_expected.pop().unwrap();
@@ -212,7 +265,7 @@ async fn it_takes_from_a_pullable_source() {
                     }
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
+                    call!(talkback, Message::Pull, "from source: {message:?}");
                 }
             })
             .into(),
@@ -222,7 +275,7 @@ async fn it_takes_from_a_pullable_source() {
     let source = make_source();
     let taken = take(3)(source);
     let sink = make_sink();
-    taken(Message::Handshake(sink));
+    call!(taken, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(300), nursery_out);
     drop(nursery);
@@ -241,8 +294,8 @@ async fn it_takes_from_a_pullable_source() {
     wasm_bindgen_test
 )]
 async fn it_takes_an_async_listenable_source() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let upwards_expected = Arc::new(array_queue!["Handshake", "Terminate"]);
     let downwards_expected_types = Arc::new(array_queue![
@@ -255,6 +308,7 @@ async fn it_takes_an_async_listenable_source() {
     let downwards_expected = Arc::new(array_queue![10, 20, 30]);
 
     let make_source = {
+        let test_fn_span = test_fn_span.clone();
         let nursery = nursery.clone();
         move || {
             let sent = Arc::new(AtomicUsize::new(0));
@@ -264,37 +318,47 @@ async fn it_takes_an_async_listenable_source() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message: Message<Never, _>| {
-                        info!("up: {message:?}");
+                        instrument!(parent: &test_fn_span, "source", source_span);
+                        info!("from sink: {message:?}");
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
                             let e = upwards_expected.pop().unwrap();
                             assert_eq!(message.variant_name(), e, "upwards type is expected: {e}");
                         }
                         if let Message::Handshake(sink) = message {
-                            nursery
-                                .nurse({
-                                    let nursery = nursery.clone();
-                                    let sent = Arc::clone(&sent);
-                                    let sink = Arc::clone(&sink);
-                                    const DURATION: Duration = Duration::from_millis(100);
-                                    async move {
-                                        loop {
-                                            nursery.sleep(DURATION).await;
-                                            if interval_cleared.load(AtomicOrdering::Acquire) {
-                                                break;
+                            {
+                                let nursery = nursery
+                                    .clone()
+                                    .instrument(info_span!(parent: &source_span, "async_task"));
+                                nursery
+                                    .nurse({
+                                        let nursery = nursery.clone();
+                                        let sent = Arc::clone(&sent);
+                                        let sink = Arc::clone(&sink);
+                                        const DURATION: Duration = Duration::from_millis(100);
+                                        async move {
+                                            loop {
+                                                nursery.sleep(DURATION).await;
+                                                if interval_cleared.load(AtomicOrdering::Acquire) {
+                                                    break;
+                                                }
+                                                let sent =
+                                                    sent.fetch_add(1, AtomicOrdering::AcqRel) + 1;
+                                                call!(
+                                                    sink,
+                                                    Message::Data(sent * 10),
+                                                    "to sink: {message:?}"
+                                                );
                                             }
-                                            let sent =
-                                                sent.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                            sink(Message::Data(sent * 10));
                                         }
-                                    }
-                                })
-                                .unwrap();
+                                    })
+                                    .unwrap();
+                            }
                             let source = {
                                 let source_ref = &mut *source_ref.write().unwrap();
                                 source_ref.take().unwrap()
                             };
-                            sink(Message::Handshake(source));
+                            call!(sink, Message::Handshake(source), "to sink: {message:?}");
                         } else if let Message::Error(_) | Message::Terminate = message {
                             interval_cleared.store(true, AtomicOrdering::Release);
                         }
@@ -312,7 +376,8 @@ async fn it_takes_an_async_listenable_source() {
 
     let sink = Arc::new(
         (move |message: Message<_, Never>| {
-            info!("down: {message:?}");
+            instrument!(parent: &test_fn_span, "sink");
+            info!("from source: {message:?}");
             {
                 let et = downwards_expected_types.pop().unwrap();
                 assert_eq!(
@@ -331,7 +396,7 @@ async fn it_takes_an_async_listenable_source() {
 
     let source = make_source();
     let taken = take(3)(source);
-    taken(Message::Handshake(sink));
+    call!(taken, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
@@ -350,14 +415,15 @@ async fn it_takes_an_async_listenable_source() {
     wasm_bindgen_test
 )]
 async fn it_returns_a_source_that_disposes_upon_upwards_end() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let upwards_expected = Arc::new(array_queue!["Handshake", "Terminate"]);
     let downwards_expected_types = Arc::new(array_queue!["Handshake", "Data", "Data", "Data"]);
     let downwards_expected = Arc::new(array_queue![10, 20, 30]);
 
     let make_source = {
+        let test_fn_span = test_fn_span.clone();
         let nursery = nursery.clone();
         move || {
             let sent = Arc::new(AtomicUsize::new(0));
@@ -367,37 +433,47 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                 {
                     let source_ref = Arc::clone(&source_ref);
                     move |message: Message<Never, _>| {
-                        info!("up: {message:?}");
+                        instrument!(parent: &test_fn_span, "source", source_span);
+                        info!("from sink: {message:?}");
                         let interval_cleared = Arc::clone(&interval_cleared);
                         {
                             let e = upwards_expected.pop().unwrap();
                             assert_eq!(message.variant_name(), e, "upwards type is expected: {e}");
                         }
                         if let Message::Handshake(sink) = message {
-                            nursery
-                                .nurse({
-                                    let nursery = nursery.clone();
-                                    let sent = Arc::clone(&sent);
-                                    let sink = Arc::clone(&sink);
-                                    const DURATION: Duration = Duration::from_millis(100);
-                                    async move {
-                                        loop {
-                                            nursery.sleep(DURATION).await;
-                                            if interval_cleared.load(AtomicOrdering::Acquire) {
-                                                break;
+                            {
+                                let nursery = nursery
+                                    .clone()
+                                    .instrument(info_span!(parent: &source_span, "async_task"));
+                                nursery
+                                    .nurse({
+                                        let nursery = nursery.clone();
+                                        let sent = Arc::clone(&sent);
+                                        let sink = Arc::clone(&sink);
+                                        const DURATION: Duration = Duration::from_millis(100);
+                                        async move {
+                                            loop {
+                                                nursery.sleep(DURATION).await;
+                                                if interval_cleared.load(AtomicOrdering::Acquire) {
+                                                    break;
+                                                }
+                                                let sent =
+                                                    sent.fetch_add(1, AtomicOrdering::AcqRel) + 1;
+                                                call!(
+                                                    sink,
+                                                    Message::Data(sent * 10),
+                                                    "to sink: {message:?}"
+                                                );
                                             }
-                                            let sent =
-                                                sent.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                            sink(Message::Data(sent * 10));
                                         }
-                                    }
-                                })
-                                .unwrap();
+                                    })
+                                    .unwrap();
+                            }
                             let source = {
                                 let source_ref = &mut *source_ref.write().unwrap();
                                 source_ref.take().unwrap()
                             };
-                            sink(Message::Handshake(source));
+                            call!(sink, Message::Handshake(source), "to sink: {message:?}");
                         } else if let Message::Error(_) | Message::Terminate = message {
                             interval_cleared.store(true, AtomicOrdering::Release);
                         }
@@ -417,7 +493,8 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message: Message<_, Never>| {
-                info!("down: {message:?}");
+                instrument!(parent: &test_fn_span, "sink");
+                info!("from source: {message:?}");
                 {
                     let et = downwards_expected_types.pop().unwrap();
                     assert_eq!(
@@ -435,7 +512,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
                 if downwards_expected.is_empty() {
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Terminate);
+                    call!(talkback, Message::Terminate, "from source: {message:?}");
                 }
             })
             .into(),
@@ -445,7 +522,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     let source = make_source();
     let taken = take(9)(source);
     let sink = make_sink();
-    taken(Message::Handshake(sink));
+    call!(taken, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(700), nursery_out);
     drop(nursery);
@@ -460,6 +537,8 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
     wasm_bindgen_test
 )]
 fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
+    let test_fn_span = Span::current();
+
     let terminations = Arc::new(AtomicUsize::new(0));
 
     let upwards_expected = Arc::new(array_queue!["Pull", "Pull", "Pull", "Terminate"]);
@@ -473,38 +552,53 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
     let downwards_expected = Arc::new(array_queue![7, 8, 9]);
 
     let range_infinite = {
+        let test_fn_span = test_fn_span.clone();
         let terminations = Arc::clone(&terminations);
         move |start| {
             Arc::new(
                 (move |message| {
-                    info!("up: {message:?}");
+                    instrument!(parent: &test_fn_span, "range_infinite", range_infinite_span);
+                    info!("from sink: {message:?}");
                     let terminations = Arc::clone(&terminations);
                     let upwards_expected = Arc::clone(&upwards_expected);
                     if let Message::Handshake(sink) = message {
                         let counter = Arc::new(AtomicUsize::new(start));
-                        sink(Message::Handshake(Arc::new(
-                            {
-                                let sink = Arc::clone(&sink);
-                                move |message: Message<Never, _>| {
-                                    info!("up: {message:?}");
-                                    {
-                                        let e = upwards_expected.pop().unwrap();
-                                        assert_eq!(
-                                            message.variant_name(),
-                                            e,
-                                            "upwards type is expected: {e}"
-                                        );
-                                    }
-                                    if let Message::Pull = message {
-                                        let counter = counter.fetch_add(1, AtomicOrdering::AcqRel);
-                                        sink(Message::Data(counter));
-                                    } else if let Message::Error(_) | Message::Terminate = message {
-                                        terminations.fetch_add(1, AtomicOrdering::AcqRel);
+                        call!(
+                            sink,
+                            Message::Handshake(Arc::new(
+                                {
+                                    let range_infinite_span = range_infinite_span.clone();
+                                    let sink = Arc::clone(&sink);
+                                    move |message: Message<Never, _>| {
+                                        instrument!(parent: &range_infinite_span, "sink_talkback");
+                                        info!("from sink: {message:?}");
+                                        {
+                                            let e = upwards_expected.pop().unwrap();
+                                            assert_eq!(
+                                                message.variant_name(),
+                                                e,
+                                                "upwards type is expected: {e}"
+                                            );
+                                        }
+                                        if let Message::Pull = message {
+                                            let counter =
+                                                counter.fetch_add(1, AtomicOrdering::AcqRel);
+                                            call!(
+                                                sink,
+                                                Message::Data(counter),
+                                                "to sink: {message:?}"
+                                            );
+                                        } else if let Message::Error(_) | Message::Terminate =
+                                            message
+                                        {
+                                            terminations.fetch_add(1, AtomicOrdering::AcqRel);
+                                        }
                                     }
                                 }
-                            }
-                            .into(),
-                        )));
+                                .into(),
+                            )),
+                            "to sink: {message:?}"
+                        );
                     }
                 })
                 .into(),
@@ -516,7 +610,8 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message: Message<_, Never>| {
-                info!("down: {message:?}");
+                instrument!(parent: &test_fn_span, "sink");
+                info!("from source: {message:?}");
                 {
                     let et = downwards_expected_types.pop().unwrap();
                     assert_eq!(
@@ -529,7 +624,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
                     talkback.store(Some(source));
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
+                    call!(talkback, Message::Pull, "from source: {message:?}");
                 } else if let Message::Data(data) = message {
                     {
                         let e = downwards_expected.pop().unwrap();
@@ -537,7 +632,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
                     }
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
+                    call!(talkback, Message::Pull, "from source: {message:?}");
                 }
             })
             .into(),
@@ -547,7 +642,7 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
     let source = range_infinite(7);
     let taken = take(3)(source);
     let sink = make_sink();
-    taken(Message::Handshake(sink));
+    call!(taken, Message::Handshake(sink), "to source: {message:?}");
 
     assert_eq!(
         terminations.load(AtomicOrdering::Acquire),
@@ -564,33 +659,50 @@ fn it_does_not_redundantly_terminate_a_synchronous_pullable_source() {
     wasm_bindgen_test
 )]
 fn it_does_not_mutually_terminate_a_sink() {
+    let test_fn_span = Span::current();
+
     let terminations = Arc::new(AtomicUsize::new(0));
     let logger_terminations = Arc::new(AtomicUsize::new(0));
 
     let range_infinite = {
+        let test_fn_span = test_fn_span.clone();
         let terminations = Arc::clone(&terminations);
         move |start| {
             Arc::new(
                 (move |message| {
-                    info!("up: {message:?}");
+                    instrument!(parent: &test_fn_span, "range_infinite", range_infinite_span);
+                    info!("from sink: {message:?}");
                     let terminations = Arc::clone(&terminations);
                     if let Message::Handshake(sink) = message {
                         let counter = Arc::new(AtomicUsize::new(start));
-                        sink(Message::Handshake(Arc::new(
-                            {
-                                let sink = Arc::clone(&sink);
-                                move |message| {
-                                    info!("up: {message:?}");
-                                    if let Message::Pull = message {
-                                        let counter = counter.fetch_add(1, AtomicOrdering::AcqRel);
-                                        sink(Message::Data(counter));
-                                    } else if let Message::Error(_) | Message::Terminate = message {
-                                        terminations.fetch_add(1, AtomicOrdering::AcqRel);
+                        call!(
+                            sink,
+                            Message::Handshake(Arc::new(
+                                {
+                                    let range_infinite_span = range_infinite_span.clone();
+                                    let sink = Arc::clone(&sink);
+                                    move |message| {
+                                        instrument!(parent: &range_infinite_span, "sink_talkback");
+                                        info!("from sink: {message:?}");
+                                        if let Message::Pull = message {
+                                            let counter =
+                                                counter.fetch_add(1, AtomicOrdering::AcqRel);
+                                            call!(
+                                                sink,
+                                                Message::Data(counter),
+                                                "to sink: {message:?}"
+                                            );
+                                        } else if let Message::Error(_) | Message::Terminate =
+                                            message
+                                        {
+                                            terminations.fetch_add(1, AtomicOrdering::AcqRel);
+                                        }
                                     }
                                 }
-                            }
-                            .into(),
-                        )));
+                                .into(),
+                            )),
+                            "to sink: {message:?}"
+                        );
                     }
                 })
                 .into(),
@@ -598,24 +710,28 @@ fn it_does_not_mutually_terminate_a_sink() {
         }
     };
 
-    let make_sink = move || {
-        let talkback = ArcSwapOption::from(None);
-        Arc::new(
-            (move |message| {
-                info!("down: {message:?}");
-                if let Message::Handshake(source) = message {
-                    talkback.store(Some(source));
-                    let talkback = talkback.load();
-                    let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
-                } else if let Message::Data(_data) = message {
-                    let talkback = talkback.load();
-                    let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
-                }
-            })
-            .into(),
-        )
+    let make_sink = {
+        let test_fn_span = test_fn_span.clone();
+        move || {
+            let talkback = ArcSwapOption::from(None);
+            Arc::new(
+                (move |message| {
+                    instrument!(parent: &test_fn_span, "sink");
+                    info!("from source: {message:?}");
+                    if let Message::Handshake(source) = message {
+                        talkback.store(Some(source));
+                        let talkback = talkback.load();
+                        let talkback = talkback.as_ref().unwrap();
+                        call!(talkback, Message::Pull, "from source: {message:?}");
+                    } else if let Message::Data(_data) = message {
+                        let talkback = talkback.load();
+                        let talkback = talkback.as_ref().unwrap();
+                        call!(talkback, Message::Pull, "from source: {message:?}");
+                    }
+                })
+                .into(),
+            )
+        }
     };
 
     let logger = {
@@ -623,41 +739,57 @@ fn it_does_not_mutually_terminate_a_sink() {
         move |source: Source<usize>| {
             Arc::new(
                 (move |message| {
-                    info!("logger: {message:?}");
+                    instrument!(parent: &test_fn_span, "logger", logger_span);
+                    info!("from sink: {message:?}");
                     let logger_terminations = Arc::clone(&logger_terminations);
                     if let Message::Handshake(sink) = message {
                         let source_talkback: Arc<ArcSwapOption<Source<usize>>> =
                             Arc::new(ArcSwapOption::from(None));
                         let talkback = Arc::new(
                             {
+                                let logger_span = logger_span.clone();
                                 let logger_terminations = Arc::clone(&logger_terminations);
                                 let source_talkback = Arc::clone(&source_talkback);
                                 move |message| {
-                                    info!("logger (from down): {message:?}");
+                                    instrument!(parent: &logger_span, "sink_talkback");
+                                    info!("from sink: {message:?}");
                                     if let Message::Error(_) | Message::Terminate = message {
                                         logger_terminations.fetch_add(1, AtomicOrdering::AcqRel);
                                     }
                                     let source_talkback = source_talkback.load();
                                     let source_talkback = source_talkback.as_ref().unwrap();
-                                    source_talkback(message);
+                                    call!(source_talkback, message, "to source: {message:?}");
                                 }
                             }
                             .into(),
                         );
-                        source(Message::Handshake(Arc::new(
-                            (move |message| {
-                                info!("logger (from up): {message:?}");
-                                if let Message::Error(_) | Message::Terminate = message {
-                                    logger_terminations.fetch_add(1, AtomicOrdering::AcqRel);
-                                } else if let Message::Handshake(source) = message {
-                                    source_talkback.store(Some(source));
-                                    sink(Message::Handshake(Arc::clone(&talkback)));
-                                } else {
-                                    sink(message);
+                        call!(
+                            source,
+                            Message::Handshake(Arc::new(
+                                {
+                                    let logger_span = logger_span.clone();
+                                    move |message| {
+                                        instrument!(parent: &logger_span, "source_talkback");
+                                        info!("from source: {message:?}");
+                                        if let Message::Error(_) | Message::Terminate = message {
+                                            logger_terminations
+                                                .fetch_add(1, AtomicOrdering::AcqRel);
+                                        } else if let Message::Handshake(source) = message {
+                                            source_talkback.store(Some(source));
+                                            call!(
+                                                sink,
+                                                Message::Handshake(Arc::clone(&talkback)),
+                                                "to sink: {message:?}"
+                                            );
+                                        } else {
+                                            call!(sink, message, "to sink: {message:?}");
+                                        }
+                                    }
                                 }
-                            })
-                            .into(),
-                        )));
+                                .into(),
+                            )),
+                            "to source: {message:?}"
+                        );
                     }
                 })
                 .into(),
@@ -668,7 +800,7 @@ fn it_does_not_mutually_terminate_a_sink() {
     let source = range_infinite(7);
     let taken = take(3)(logger(take(3)(source)));
     let sink = make_sink();
-    taken(Message::Handshake(sink));
+    call!(taken, Message::Handshake(sink), "to source: {message:?}");
 
     assert_eq!(
         terminations.load(AtomicOrdering::Acquire),

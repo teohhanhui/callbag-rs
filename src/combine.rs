@@ -5,7 +5,16 @@ use std::sync::{
     Arc,
 };
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Callbag factory that combines the latest data points from multiple (2 or more) callbag sources.
 ///
@@ -83,7 +92,7 @@ macro_rules! combine_impls {
         $Combine:ident {
             $(($idx:tt) -> $T:ident)+
         }
-    )+) => { paste! {
+    )+) => (paste! {
         $(
             impl<$($T),+> Unwrap for ($(Option<$T>,)+) {
                 type Output = ($($T,)+);
@@ -93,108 +102,202 @@ macro_rules! combine_impls {
                 }
             }
 
-            impl<$($T: 'static, [<S $T>]: 'static),+> Combine for ($([<S $T>],)+)
+            impl<$(
+                #[cfg(not(feature = "trace"))] $T: 'static,
+                #[cfg(feature = "trace")] $T: fmt::Debug + 'static,
+                #[cfg(not(feature = "trace"))] [<S $T>]: 'static,
+                #[cfg(feature = "trace")] [<S $T>]: fmt::Debug + 'static,
+            )+> Combine for ($([<S $T>],)+)
             where
                 $(
-                    $T: Send + Sync + Clone,
+                    $T: Clone + Send + Sync,
                     [<S $T>]: IntoArcSource<Output = $T> + Send + Sync,
                 )+
             {
                 type Output = ($($T,)+);
 
+                #[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
                 fn combine(self) -> Source<Self::Output> {
+                    #[cfg(feature = "trace")]
+                    let combine_fn_span = Span::current();
                     $(
                         let [<source_ $idx>] = self.$idx.into_arc_source();
                     )+
                     (move |message| {
+                        instrument!(
+                            follows_from: &combine_fn_span,
+                            "combine",
+                            combine_span
+                        );
+                        trace!("from sink: {message:?}");
                         if let Message::Handshake(sink) = message {
                             const N: usize = last_literal!($($idx,)+) + 1;
                             let n_start = Arc::new(AtomicUsize::new(N));
                             let n_data = Arc::new(AtomicUsize::new(N));
                             let n_end = Arc::new(AtomicUsize::new(N));
-                            let vals: Arc<ArcSwap<($(Option<$T>,)+)>> = Arc::new(Default::default());
-                            let source_talkbacks: Arc<($(ArcSwapOption<Source<$T>>,)+)> = Arc::new(Default::default());
+                            let vals: Arc<ArcSwap<($(Option<$T>,)+)>> =
+                                Arc::new(Default::default());
+                            let source_talkbacks: Arc<($(ArcSwapOption<Source<$T>>,)+)> =
+                                Arc::new(Default::default());
                             let talkback: Arc<Source<Self::Output>> = Arc::new(
                                 {
+                                    #[cfg(feature = "trace")]
+                                    let combine_span = combine_span.clone();
                                     let source_talkbacks = Arc::clone(&source_talkbacks);
-                                    move |message| match message {
-                                        Message::Handshake(_) => {
-                                            panic!("sink handshake has already occurred");
-                                        }
-                                        Message::Data(_) => {
-                                            panic!("sink must not send data");
-                                        }
-                                        Message::Pull => {
-                                            $({
-                                                let source_talkback = source_talkbacks.$idx.load();
-                                                let source_talkback = source_talkback.as_ref().expect("source talkback not set");
-                                                source_talkback(Message::Pull);
-                                            })+
-                                        }
-                                        Message::Error(ref error) => {
-                                            $({
-                                                let source_talkback = source_talkbacks.$idx.load();
-                                                let source_talkback = source_talkback.as_ref().expect("source talkback not set");
-                                                source_talkback(Message::Error(error.clone()));
-                                            })+
-                                        }
-                                        Message::Terminate => {
-                                            $({
-                                                let source_talkback = source_talkbacks.$idx.load();
-                                                let source_talkback = source_talkback.as_ref().expect("source talkback not set");
-                                                source_talkback(Message::Terminate);
-                                            })+
+                                    move |message| {
+                                        instrument!(
+                                            parent: &combine_span,
+                                            "sink_talkback"
+                                        );
+                                        trace!("from sink: {message:?}");
+                                        match message {
+                                            Message::Handshake(_) => {
+                                                panic!("sink handshake has already occurred");
+                                            }
+                                            Message::Data(_) => {
+                                                panic!("sink must not send data");
+                                            }
+                                            Message::Pull => {
+                                                $(
+                                                    let source_talkback =
+                                                        source_talkbacks.$idx.load();
+                                                    let source_talkback = source_talkback
+                                                        .as_ref()
+                                                        .expect("source talkback not set");
+                                                    call!(
+                                                        source_talkback,
+                                                        Message::Pull,
+                                                        "to source {i}: {message:?}",
+                                                        i = $idx,
+                                                    );
+                                                )+
+                                            }
+                                            Message::Error(ref error) => {
+                                                $(
+                                                    let source_talkback =
+                                                        source_talkbacks.$idx.load();
+                                                    let source_talkback = source_talkback
+                                                        .as_ref()
+                                                        .expect("source talkback not set");
+                                                    call!(
+                                                        source_talkback,
+                                                        Message::Error(Arc::clone(error)),
+                                                        "to source {i}: {message:?}",
+                                                        i = $idx,
+                                                    );
+                                                )+
+                                            }
+                                            Message::Terminate => {
+                                                $(
+                                                    let source_talkback =
+                                                        source_talkbacks.$idx.load();
+                                                    let source_talkback = source_talkback
+                                                        .as_ref()
+                                                        .expect("source talkback not set");
+                                                    call!(
+                                                        source_talkback,
+                                                        Message::Terminate,
+                                                        "to source {i}: {message:?}",
+                                                        i = $idx,
+                                                    );
+                                                )+
+                                            }
                                         }
                                     }
                                 }
-                                .into()
+                                .into(),
                             );
                             $(
-                                [<source_ $idx>](Message::Handshake(Arc::new(
-                                    {
-                                        let sink = Arc::clone(&sink);
-                                        let n_start = Arc::clone(&n_start);
-                                        let n_data = Arc::clone(&n_data);
-                                        let n_end = Arc::clone(&n_end);
-                                        let vals = Arc::clone(&vals);
-                                        let source_talkbacks = Arc::clone(&source_talkbacks);
-                                        let talkback = Arc::clone(&talkback);
-                                        move |message| match message {
-                                            Message::Handshake(source) => {
-                                                source_talkbacks.$idx.store(Some(source));
-                                                let n_start = n_start.fetch_sub(1, AtomicOrdering::AcqRel) - 1;
-                                                if n_start == 0 {
-                                                    sink(Message::Handshake(Arc::clone(&talkback)));
-                                                }
-                                            }
-                                            Message::Data(data) => {
-                                                let n_data = if vals.load().$idx.is_none() {
-                                                    n_data.fetch_sub(1, AtomicOrdering::AcqRel) - 1
-                                                } else {
-                                                    n_data.load(AtomicOrdering::Acquire)
-                                                };
-                                                vals.rcu(move |vals| {
-                                                    let mut vals = (**vals).clone();
-                                                    vals.$idx = Some(data.clone());
-                                                    vals
-                                                });
-                                                if n_data == 0 {
-                                                    sink(Message::Data((**vals.load()).clone().unwrap()));
-                                                }
-                                            }
-                                            Message::Pull => {
-                                                panic!("source must not pull");
-                                            }
-                                            Message::Error(_) | Message::Terminate => {
-                                                let n_end = n_end.fetch_sub(1, AtomicOrdering::AcqRel) - 1;
-                                                if n_end == 0 {
-                                                    sink(Message::Terminate);
+                                call!(
+                                    [<source_ $idx>],
+                                    Message::Handshake(Arc::new(
+                                        {
+                                            #[cfg(feature = "trace")]
+                                            let combine_span = combine_span.clone();
+                                            let sink = Arc::clone(&sink);
+                                            let n_start = Arc::clone(&n_start);
+                                            let n_data = Arc::clone(&n_data);
+                                            let n_end = Arc::clone(&n_end);
+                                            let vals = Arc::clone(&vals);
+                                            let source_talkbacks = Arc::clone(&source_talkbacks);
+                                            let talkback = Arc::clone(&talkback);
+                                            move |message| {
+                                                instrument!(
+                                                    parent: &combine_span,
+                                                    "source_talkback"
+                                                );
+                                                trace!("from source {i}: {message:?}", i = $idx);
+                                                match message {
+                                                    Message::Handshake(source) => {
+                                                        source_talkbacks.$idx.store(Some(source));
+                                                        let n_start = n_start
+                                                            .fetch_sub(1, AtomicOrdering::AcqRel)
+                                                            - 1;
+                                                        if n_start == 0 {
+                                                            call!(
+                                                                sink,
+                                                                Message::Handshake(Arc::clone(
+                                                                    &talkback
+                                                                )),
+                                                                "to sink: {message:?}"
+                                                            );
+                                                        }
+                                                    }
+                                                    Message::Data(data) => {
+                                                        let n_data = if vals
+                                                            .load()
+                                                            .$idx
+                                                            .is_none()
+                                                        {
+                                                            n_data.fetch_sub(
+                                                                1,
+                                                                AtomicOrdering::AcqRel,
+                                                            ) - 1
+                                                        } else {
+                                                            n_data.load(
+                                                                AtomicOrdering::Acquire,
+                                                            )
+                                                        };
+                                                        vals.rcu(move |vals| {
+                                                            let mut vals = (**vals).clone();
+                                                            vals.$idx = Some(data.clone());
+                                                            vals
+                                                        });
+                                                        if n_data == 0 {
+                                                            call!(
+                                                                sink,
+                                                                Message::Data(
+                                                                    (**vals.load())
+                                                                        .clone()
+                                                                        .unwrap(),
+                                                                ),
+                                                                "to sink: {message:?}"
+                                                            );
+                                                        }
+                                                    }
+                                                    Message::Pull => {
+                                                        panic!("source must not pull");
+                                                    }
+                                                    Message::Error(_) | Message::Terminate => {
+                                                    let n_end = n_end
+                                                        .fetch_sub(1, AtomicOrdering::AcqRel)
+                                                        - 1;
+                                                        if n_end == 0 {
+                                                            call!(
+                                                                sink,
+                                                                Message::Terminate,
+                                                                "to sink: {message:?}"
+                                                            );
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                    .into()
-                                )));
+                                        .into(),
+                                    )),
+                                    "to source {i}: {message:?}",
+                                    i = $idx,
+                                );
                             )+
                         }
                     })
@@ -202,7 +305,7 @@ macro_rules! combine_impls {
                 }
             }
         )+
-    } };
+    });
 }
 
 macro_rules! last_literal {
@@ -370,6 +473,9 @@ impl<T> IntoArcSource for Box<Source<T>> {
 /// Due to a temporary restriction in Rust’s type system, the `Combine` trait is only implemented
 /// on tuples of arity 12 or less.
 #[doc(hidden)]
-pub fn combine<T: Combine>(sources: T) -> Source<<T as Combine>::Output> {
+pub fn combine<T>(sources: T) -> Source<<T as Combine>::Output>
+where
+    T: Combine,
+{
     sources.combine()
 }

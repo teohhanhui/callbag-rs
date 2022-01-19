@@ -1,5 +1,8 @@
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
-use crate::common::array_queue;
+use crate::{
+    common::array_queue,
+    utils::{call, tracing::instrument},
+};
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 use callbag::{interval, Message};
 #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
@@ -8,7 +11,7 @@ use {
     async_executors::Timer,
     async_nursery::{NurseExt, Nursery},
     std::{sync::Arc, time::Duration},
-    tracing::info,
+    tracing::{info, info_span, Span},
     tracing_futures::Instrument,
 };
 
@@ -23,7 +26,10 @@ use wasm_bindgen_test::wasm_bindgen_test;
 ))]
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 pub mod common;
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+pub mod utils;
 
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -43,8 +49,8 @@ wasm_bindgen_test_configure!(run_in_browser);
     wasm_bindgen_test
 )]
 async fn interval_50_sends_5_times_then_we_dispose_it() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let expected = Arc::new(array_queue![0, 1, 2, 3, 4]);
 
@@ -52,7 +58,8 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
         let talkback = ArcSwapOption::from(None);
         Arc::new(
             (move |message| {
-                info!("down: {message:?}");
+                instrument!(parent: &test_fn_span, "sink");
+                info!("from source: {message:?}");
                 if let Message::Handshake(source) = message {
                     talkback.store(Some(source));
                 } else if let Message::Data(data) = message {
@@ -60,7 +67,7 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
                     if expected.is_empty() {
                         let talkback = talkback.load();
                         let talkback = talkback.as_ref().unwrap();
-                        talkback(Message::Terminate);
+                        call!(talkback, Message::Terminate, "to source: {message:?}");
                     }
                 }
             })
@@ -68,7 +75,11 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
         )
     };
 
-    interval(Duration::from_millis(50), nursery.clone())(Message::Handshake(observe));
+    call!(
+        interval(Duration::from_millis(50), nursery.clone()),
+        Message::Handshake(observe),
+        "to source: {message:?}"
+    );
 
     drop(nursery);
     nursery_out.await;
@@ -86,8 +97,8 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
     wasm_bindgen_test
 )]
 async fn interval_1000_can_be_disposed_before_anything_is_sent() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let observe = {
         let talkback = Arc::new(ArcSwapOption::from(None));
@@ -95,22 +106,32 @@ async fn interval_1000_can_be_disposed_before_anything_is_sent() {
             {
                 let nursery = nursery.clone();
                 move |message| {
-                    info!("down: {message:?}");
+                    instrument!(parent: &test_fn_span, "sink", sink_span);
+                    info!("from source: {message:?}");
                     if let Message::Handshake(source) = message {
                         talkback.store(Some(source));
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let talkback = Arc::clone(&talkback);
-                                const DURATION: Duration = Duration::from_millis(200);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    let talkback = talkback.load();
-                                    let talkback = talkback.as_ref().unwrap();
-                                    talkback(Message::Terminate);
-                                }
-                            })
-                            .unwrap();
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &sink_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let talkback = Arc::clone(&talkback);
+                                    const DURATION: Duration = Duration::from_millis(200);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        let talkback = talkback.load();
+                                        let talkback = talkback.as_ref().unwrap();
+                                        call!(
+                                            talkback,
+                                            Message::Terminate,
+                                            "to source: {message:?}"
+                                        );
+                                    }
+                                })
+                                .unwrap();
+                        }
                     } else if let Message::Data(_data) = message {
                         panic!("data should not be sent");
                     }
@@ -120,7 +141,11 @@ async fn interval_1000_can_be_disposed_before_anything_is_sent() {
         )
     };
 
-    interval(Duration::from_millis(1_000), nursery.clone())(Message::Handshake(observe));
+    call!(
+        interval(Duration::from_millis(1_000), nursery.clone()),
+        Message::Handshake(observe),
+        "to source: {message:?}"
+    );
 
     drop(nursery);
     nursery_out.await;

@@ -8,7 +8,19 @@ use std::{
     time::Duration,
 };
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
+
+#[cfg(feature = "trace_futures")]
+use {tracing::trace_span, tracing_futures::Instrument};
 
 /// A callbag listenable source that sends incremental numbers every x milliseconds.
 ///
@@ -53,14 +65,30 @@ use crate::{Message, Source};
 ///     [0, 1, 2, 3]
 /// );
 /// ```
-pub fn interval(
+#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+pub fn interval<
+    #[cfg(not(feature = "trace"))] N: 'static,
+    #[cfg(all(feature = "trace", not(feature = "trace_futures")))] N: fmt::Debug + 'static,
+    #[cfg(feature = "trace_futures")] N: Instrument + fmt::Debug + 'static,
+>(
     period: Duration,
-    nursery: impl Nurse<()> + Timer + Send + Sync + Clone + 'static,
-) -> Source<usize> {
+    nursery: N,
+) -> Source<usize>
+where
+    N: Nurse<()> + Timer + Clone + Send + Sync,
+{
+    #[cfg(feature = "trace")]
+    let interval_fn_span = Span::current();
     (move |message| {
+        instrument!(follows_from: &interval_fn_span, "interval", interval_span);
+        trace!("from sink: {message:?}");
         if let Message::Handshake(sink) = message {
             let i = AtomicUsize::new(0);
             let interval_cleared = Arc::new(AtomicBool::new(false));
+            #[cfg(feature = "trace_futures")]
+            let nursery = nursery
+                .clone()
+                .instrument(trace_span!(parent: &interval_span, "async_task"));
             if let Err(err) = nursery.nurse({
                 let nursery = nursery.clone();
                 let sink = Arc::clone(&sink);
@@ -72,21 +100,31 @@ pub fn interval(
                             break;
                         }
                         let i = i.fetch_add(1, AtomicOrdering::AcqRel);
-                        sink(Message::Data(i));
+                        call!(sink, Message::Data(i), "to sink: {message:?}");
                     }
                 }
             }) {
-                sink(Message::Error(Arc::new(err)));
+                call!(sink, Message::Error(Arc::new(err)), "to sink: {message:?}");
                 return;
             }
-            sink(Message::Handshake(Arc::new(
-                (move |message| {
-                    if let Message::Error(_) | Message::Terminate = message {
-                        interval_cleared.store(true, AtomicOrdering::Release);
+            call!(
+                sink,
+                Message::Handshake(Arc::new(
+                    {
+                        #[cfg(feature = "trace")]
+                        let interval_span = interval_span.clone();
+                        move |message| {
+                            instrument!(parent: &interval_span, "sink_talkback");
+                            trace!("from sink: {message:?}");
+                            if let Message::Error(_) | Message::Terminate = message {
+                                interval_cleared.store(true, AtomicOrdering::Release);
+                            }
+                        }
                     }
-                })
-                .into(),
-            )));
+                    .into(),
+                )),
+                "to sink: {message:?}"
+            );
         }
     })
     .into()
