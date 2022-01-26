@@ -1,4 +1,6 @@
 # empty_item_single_line = false
+# error_on_line_overflow = true
+# format_strings = true
 # imports_layout = "HorizontalVertical"
 match_block_trailing_comma = true
 newline_style = "Unix"

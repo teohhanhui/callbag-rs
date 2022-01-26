@@ -14,21 +14,24 @@ categories = ["asynchronous", "concurrency"]
 arc-swap = "1.5.0"
 async_executors = { version = "0.5.1", optional = true }
 async_nursery = { version = "0.4.0", default-features = false, optional = true }
+cfg-if = "1.0.0"
 never = "0.1.0"
 paste = { version = "1.0.6", optional = true }
+tracing = { version = "0.1.29", optional = true }
+tracing-futures = { version = "0.2.5", optional = true }
 
 [dev-dependencies]
-assert_matches = "1.5.0"
 crossbeam-queue = "0.3.3"
+paste = "1.0.6"
 test-log = { version = "0.2.8", default-features = false, features = ["trace"] }
 tracing = "0.1.29"
-tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes", "unstable"] }
 async_executors = { version = "0.5.1", features = ["async_std", "tracing"] }
 async_nursery = { version = "0.4.0", features = ["tracing"] }
+tracing-futures = "0.2.5"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dev-dependencies]
 async_executors = { version = "0.5.1", features = ["timer"] }
@@ -66,6 +69,8 @@ scan = []
 share = []
 skip = []
 take = []
+trace = ["paste", "tracing"]
+trace_futures = ["trace", "tracing-futures"]
 
 [lib]
 doctest = false

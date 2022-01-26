@@ -229,6 +229,7 @@ mod share;
 mod skip;
 #[cfg(feature = "take")]
 mod take;
+mod utils;
 
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]

@@ -5,9 +5,12 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
     Arc,
 };
-use tracing::info;
+use tracing::{info, Span};
 
-use crate::common::{array_queue, VariantName};
+use crate::{
+    common::{array_queue, VariantName},
+    utils::{call, tracing::instrument},
+};
 
 use callbag::{from_iter, Message};
 
@@ -20,6 +23,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 pub mod common;
+pub mod utils;
 
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -35,6 +39,8 @@ wasm_bindgen_test_configure!(run_in_browser);
     wasm_bindgen_test
 )]
 fn it_sends_array_items_iterable_to_a_puller_sink() {
+    let test_fn_span = Span::current();
+
     let source = from_iter([10, 20, 30]);
 
     let downwards_expected_types = Arc::new(array_queue![
@@ -47,35 +53,40 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
     let downwards_expected = Arc::new(array_queue![10, 20, 30]);
 
     let talkback = ArcSwapOption::from(None);
-    source(Message::Handshake(Arc::new(
-        (move |message: Message<_, Never>| {
-            info!("down: {message:?}");
-            {
-                let et = downwards_expected_types.pop().unwrap();
-                assert_eq!(
-                    message.variant_name(),
-                    et,
-                    "downwards type is expected: {et}"
-                );
-            }
-
-            if let Message::Handshake(source) = message {
-                talkback.store(Some(source));
-                let talkback = talkback.load();
-                let talkback = talkback.as_ref().unwrap();
-                talkback(Message::Pull);
-            } else if let Message::Data(data) = message {
+    call!(
+        source,
+        Message::Handshake(Arc::new(
+            (move |message: Message<_, Never>| {
+                instrument!(parent: &test_fn_span, "sink");
+                info!("from source: {message:?}");
                 {
-                    let e = downwards_expected.pop().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {e}");
+                    let et = downwards_expected_types.pop().unwrap();
+                    assert_eq!(
+                        message.variant_name(),
+                        et,
+                        "downwards type is expected: {et}"
+                    );
                 }
-                let talkback = talkback.load();
-                let talkback = talkback.as_ref().unwrap();
-                talkback(Message::Pull);
-            }
-        })
-        .into(),
-    )));
+
+                if let Message::Handshake(source) = message {
+                    talkback.store(Some(source));
+                    let talkback = talkback.load();
+                    let talkback = talkback.as_ref().unwrap();
+                    call!(talkback, Message::Pull, "to source: {message:?}");
+                } else if let Message::Data(data) = message {
+                    {
+                        let e = downwards_expected.pop().unwrap();
+                        assert_eq!(data, e, "downwards data is expected: {e}");
+                    }
+                    let talkback = talkback.load();
+                    let talkback = talkback.as_ref().unwrap();
+                    call!(talkback, Message::Pull, "to source: {message:?}");
+                }
+            })
+            .into(),
+        )),
+        "to source: {message:?}"
+    );
 }
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L36-L66>
@@ -86,6 +97,8 @@ fn it_sends_array_items_iterable_to_a_puller_sink() {
     wasm_bindgen_test
 )]
 fn it_sends_array_entries_iterator_to_a_puller_sink() {
+    let test_fn_span = Span::current();
+
     let source = from_iter(["a", "b", "c"].into_iter().enumerate());
 
     let downwards_expected_types = Arc::new(array_queue![
@@ -98,46 +111,54 @@ fn it_sends_array_entries_iterator_to_a_puller_sink() {
     let downwards_expected = Arc::new(array_queue![(0, "a"), (1, "b"), (2, "c")]);
 
     let talkback = ArcSwapOption::from(None);
-    source(Message::Handshake(Arc::new(
-        (move |message: Message<_, Never>| {
-            info!("down: {message:?}");
-            {
-                let et = downwards_expected_types.pop().unwrap();
-                assert_eq!(
-                    message.variant_name(),
-                    et,
-                    "downwards type is expected: {et}"
-                );
-            }
-
-            if let Message::Handshake(source) = message {
-                talkback.store(Some(source));
-                let talkback = talkback.load();
-                let talkback = talkback.as_ref().unwrap();
-                talkback(Message::Pull);
-            } else if let Message::Data(data) = message {
+    call!(
+        source,
+        Message::Handshake(Arc::new(
+            (move |message: Message<_, Never>| {
+                instrument!(parent: &test_fn_span, "sink");
+                info!("from source: {message:?}");
                 {
-                    let e = downwards_expected.pop().unwrap();
-                    assert_eq!(data, e, "downwards data is expected: {e:?}");
+                    let et = downwards_expected_types.pop().unwrap();
+                    assert_eq!(
+                        message.variant_name(),
+                        et,
+                        "downwards type is expected: {et}"
+                    );
                 }
-                let talkback = talkback.load();
-                let talkback = talkback.as_ref().unwrap();
-                talkback(Message::Pull);
-            }
-        })
-        .into(),
-    )));
+
+                if let Message::Handshake(source) = message {
+                    talkback.store(Some(source));
+                    let talkback = talkback.load();
+                    let talkback = talkback.as_ref().unwrap();
+                    call!(talkback, Message::Pull, "to source: {message:?}");
+                } else if let Message::Data(data) = message {
+                    {
+                        let e = downwards_expected.pop().unwrap();
+                        assert_eq!(data, e, "downwards data is expected: {e:?}");
+                    }
+                    let talkback = talkback.load();
+                    let talkback = talkback.as_ref().unwrap();
+                    call!(talkback, Message::Pull, "to source: {message:?}");
+                }
+            })
+            .into(),
+        )),
+        "to source: {message:?}"
+    );
 }
 
 /// See <https://github.com/staltz/callbag-from-iter/blob/a5942d3a23da500b771d2078f296df2e41235b3a/test.js#L68-L97>
 #[tracing::instrument]
-#[test_log::test]
+// #[test_log::test] // don't blow up stdout
+#[test]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
-    #[derive(Clone)]
+    let test_fn_span = Span::current();
+
+    #[derive(Clone, Debug)]
     struct Gen {
         i: Arc<AtomicUsize>,
     }
@@ -168,32 +189,37 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
 
     let talkback = ArcSwapOption::from(None);
     let iterated = Arc::new(AtomicBool::new(false));
-    source(Message::Handshake(Arc::new(
-        {
-            let iterated = Arc::clone(&iterated);
-            move |message| {
-                // info!("down: {message:?}"); // don't blow up stdout
-                if let Message::Handshake(source) = message {
-                    talkback.store(Some(source));
-                    let talkback = talkback.load();
-                    let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
-                } else if let Message::Data(_data) = message {
-                    let talkback = talkback.load();
-                    let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
-                } else if let Message::Error(_) | Message::Terminate = message {
-                    assert_eq!(
-                        i.load(AtomicOrdering::Acquire),
-                        1_000_000,
-                        "1 million items were iterated"
-                    );
-                    iterated.store(true, AtomicOrdering::Release);
+    call!(
+        source,
+        Message::Handshake(Arc::new(
+            {
+                let iterated = Arc::clone(&iterated);
+                move |message| {
+                    instrument!(parent: &test_fn_span, "sink");
+                    info!("from source: {message:?}");
+                    if let Message::Handshake(source) = message {
+                        talkback.store(Some(source));
+                        let talkback = talkback.load();
+                        let talkback = talkback.as_ref().unwrap();
+                        call!(talkback, Message::Pull, "to source: {message:?}");
+                    } else if let Message::Data(_data) = message {
+                        let talkback = talkback.load();
+                        let talkback = talkback.as_ref().unwrap();
+                        call!(talkback, Message::Pull, "to source: {message:?}");
+                    } else if let Message::Error(_) | Message::Terminate = message {
+                        assert_eq!(
+                            i.load(AtomicOrdering::Acquire),
+                            1_000_000,
+                            "1 million items were iterated"
+                        );
+                        iterated.store(true, AtomicOrdering::Release);
+                    }
                 }
             }
-        }
-        .into(),
-    )));
+            .into(),
+        )),
+        "to source: {message:?}"
+    );
     assert!(
         iterated.load(AtomicOrdering::Acquire),
         "iteration happened synchronously"
@@ -208,43 +234,50 @@ fn it_does_not_blow_up_the_stack_when_iterating_something_huge() {
     wasm_bindgen_test
 )]
 fn it_stops_sending_after_source_completion() {
+    let test_fn_span = Span::current();
+
     let source = from_iter([10, 20, 30]);
 
     let actual = Arc::new(SegQueue::new());
     let downwards_expected_types = Arc::new(array_queue!["Handshake", "Data"]);
 
     let talkback = ArcSwapOption::from(None);
-    source(Message::Handshake(Arc::new(
-        {
-            let actual = Arc::clone(&actual);
-            move |message: Message<_, Never>| {
-                info!("down: {message:?}");
-                {
-                    let et = downwards_expected_types.pop().unwrap();
-                    assert_eq!(
-                        message.variant_name(),
-                        et,
-                        "downwards type is expected: {et}"
-                    );
-                }
+    call!(
+        source,
+        Message::Handshake(Arc::new(
+            {
+                let actual = Arc::clone(&actual);
+                move |message: Message<_, Never>| {
+                    instrument!(parent: &test_fn_span, "sink");
+                    info!("from source: {message:?}");
+                    {
+                        let et = downwards_expected_types.pop().unwrap();
+                        assert_eq!(
+                            message.variant_name(),
+                            et,
+                            "downwards type is expected: {et}"
+                        );
+                    }
 
-                if let Message::Handshake(source) = message {
-                    talkback.store(Some(source));
-                    let talkback = talkback.load();
-                    let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
-                } else if let Message::Data(data) = message {
-                    actual.push(data);
-                    let talkback = talkback.load();
-                    let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Terminate);
-                    talkback(Message::Pull);
-                    talkback(Message::Pull);
+                    if let Message::Handshake(source) = message {
+                        talkback.store(Some(source));
+                        let talkback = talkback.load();
+                        let talkback = talkback.as_ref().unwrap();
+                        call!(talkback, Message::Pull, "to source: {message:?}");
+                    } else if let Message::Data(data) = message {
+                        actual.push(data);
+                        let talkback = talkback.load();
+                        let talkback = talkback.as_ref().unwrap();
+                        call!(talkback, Message::Terminate, "to source: {message:?}");
+                        call!(talkback, Message::Pull, "to source: {message:?}");
+                        call!(talkback, Message::Pull, "to source: {message:?}");
+                    }
                 }
             }
-        }
-        .into(),
-    )));
+            .into(),
+        )),
+        "to source: {message:?}"
+    );
 
     assert_eq!(
         &{

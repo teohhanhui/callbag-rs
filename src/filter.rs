@@ -1,7 +1,16 @@
 use arc_swap::ArcSwapOption;
 use std::sync::Arc;
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Callbag operator that conditionally lets data pass through.
 ///
@@ -40,83 +49,160 @@ use crate::{Message, Source};
 ///     [1, 3, 5]
 /// );
 /// ```
-pub fn filter<I: 'static, F: 'static, S>(condition: F) -> Box<dyn Fn(S) -> Source<I>>
+#[cfg_attr(
+    feature = "trace",
+    tracing::instrument(level = "trace", skip(condition))
+)]
+pub fn filter<
+    #[cfg(not(feature = "trace"))] I: 'static,
+    #[cfg(feature = "trace")] I: fmt::Debug + 'static,
+    F: 'static,
+    S,
+>(
+    condition: F,
+) -> Box<dyn Fn(S) -> Source<I>>
 where
-    F: Fn(&I) -> bool + Send + Sync + Clone,
+    F: Fn(&I) -> bool + Clone + Send + Sync,
     S: Into<Arc<Source<I>>>,
 {
+    #[cfg(feature = "trace")]
+    let filter_fn_span = Span::current();
     Box::new(move |source| {
+        #[cfg(feature = "trace")]
+        let _filter_fn_entered = filter_fn_span.enter();
         let source: Arc<Source<I>> = source.into();
         {
             let condition = condition.clone();
+            #[cfg(feature = "trace")]
+            let filter_fn_span = filter_fn_span.clone();
             move |message| {
+                instrument!(follows_from: &filter_fn_span, "filter", filter_span);
+                trace!("from sink: {message:?}");
                 if let Message::Handshake(sink) = message {
                     let talkback = Arc::new(ArcSwapOption::from(None));
-                    source(Message::Handshake(Arc::new(
-                        {
-                            let condition = condition.clone();
-                            move |message| {
-                                let talkback = Arc::clone(&talkback);
-                                match message {
-                                    Message::Handshake(source) => {
-                                        talkback.store(Some(source));
-                                        sink(Message::Handshake(Arc::new(
-                                            (move |message| match message {
-                                                Message::Handshake(_) => {
-                                                    panic!("sink handshake has already occurred");
-                                                },
-                                                Message::Data(_) => {
-                                                    panic!("sink must not send data");
-                                                },
-                                                Message::Pull => {
-                                                    let talkback = talkback.load();
-                                                    let source = talkback
-                                                        .as_ref()
-                                                        .expect("source talkback not set");
-                                                    source(Message::Pull);
-                                                },
-                                                Message::Error(error) => {
-                                                    let talkback = talkback.load();
-                                                    let source = talkback
-                                                        .as_ref()
-                                                        .expect("source talkback not set");
-                                                    source(Message::Error(error));
-                                                },
-                                                Message::Terminate => {
-                                                    let talkback = talkback.load();
-                                                    let source = talkback
-                                                        .as_ref()
-                                                        .expect("source talkback not set");
-                                                    source(Message::Terminate);
-                                                },
-                                            })
-                                            .into(),
-                                        )));
-                                    },
-                                    Message::Data(data) => {
-                                        if condition(&data) {
-                                            sink(Message::Data(data));
-                                        } else {
-                                            let talkback = talkback.load();
-                                            let talkback =
-                                                talkback.as_ref().expect("source talkback not set");
-                                            talkback(Message::Pull);
-                                        }
-                                    },
-                                    Message::Pull => {
-                                        panic!("source must not pull");
-                                    },
-                                    Message::Error(error) => {
-                                        sink(Message::Error(error));
-                                    },
-                                    Message::Terminate => {
-                                        sink(Message::Terminate);
-                                    },
+                    call!(
+                        source,
+                        Message::Handshake(Arc::new(
+                            {
+                                let condition = condition.clone();
+                                #[cfg(feature = "trace")]
+                                let filter_span = filter_span.clone();
+                                move |message| {
+                                    instrument!(parent: &filter_span, "source_talkback");
+                                    trace!("from source: {message:?}");
+                                    let talkback = Arc::clone(&talkback);
+                                    match message {
+                                        Message::Handshake(source) => {
+                                            talkback.store(Some(source));
+                                            call!(
+                                                sink,
+                                                Message::Handshake(Arc::new(
+                                                    {
+                                                        #[cfg(feature = "trace")]
+                                                        let filter_span = filter_span.clone();
+                                                        move |message| {
+                                                            instrument!(
+                                                                parent: &filter_span,
+                                                                "sink_talkback"
+                                                            );
+                                                            trace!("from sink: {message:?}");
+                                                            match message {
+                                                                Message::Handshake(_) => {
+                                                                    panic!(
+                                                            "sink handshake has already occurred"
+                                                        );
+                                                                },
+                                                                Message::Data(_) => {
+                                                                    panic!(
+                                                                        "sink must not send data"
+                                                                    );
+                                                                },
+                                                                Message::Pull => {
+                                                                    let talkback = talkback.load();
+                                                                    let source = talkback
+                                                                        .as_ref()
+                                                                        .expect(
+                                                                        "source talkback not set",
+                                                                    );
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Pull,
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                                Message::Error(error) => {
+                                                                    let talkback = talkback.load();
+                                                                    let source = talkback
+                                                                        .as_ref()
+                                                                        .expect(
+                                                                        "source talkback not set",
+                                                                    );
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Error(error),
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                                Message::Terminate => {
+                                                                    let talkback = talkback.load();
+                                                                    let source = talkback
+                                                                        .as_ref()
+                                                                        .expect(
+                                                                        "source talkback not set",
+                                                                    );
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Terminate,
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                            }
+                                                        }
+                                                    }
+                                                    .into(),
+                                                )),
+                                                "to sink: {message:?}"
+                                            );
+                                        },
+                                        Message::Data(data) => {
+                                            if condition(&data) {
+                                                call!(
+                                                    sink,
+                                                    Message::Data(data),
+                                                    "to sink: {message:?}"
+                                                );
+                                            } else {
+                                                let talkback = talkback.load();
+                                                let talkback = talkback
+                                                    .as_ref()
+                                                    .expect("source talkback not set");
+                                                call!(
+                                                    talkback,
+                                                    Message::Pull,
+                                                    "to source: {message:?}"
+                                                );
+                                            }
+                                        },
+                                        Message::Pull => {
+                                            panic!("source must not pull");
+                                        },
+                                        Message::Error(error) => {
+                                            call!(
+                                                sink,
+                                                Message::Error(error),
+                                                "to sink: {message:?}"
+                                            );
+                                        },
+                                        Message::Terminate => {
+                                            call!(sink, Message::Terminate, "to sink: {message:?}");
+                                        },
+                                    }
                                 }
                             }
-                        }
-                        .into(),
-                    )));
+                            .into(),
+                        )),
+                        "to source: {message:?}"
+                    );
                 }
             }
         }

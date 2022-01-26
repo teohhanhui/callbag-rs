@@ -1,7 +1,16 @@
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 
-use crate::{Message, Source};
+use crate::{
+    utils::{
+        call,
+        tracing::{instrument, trace},
+    },
+    Message, Source,
+};
+
+#[cfg(feature = "trace")]
+use {std::fmt, tracing::Span};
 
 /// Callbag operator that combines consecutive values from the same source.
 ///
@@ -44,66 +53,134 @@ use crate::{Message, Source};
 ///     [1, 3, 6, 10, 15]
 /// );
 /// ```
-pub fn scan<I: 'static, O: 'static, F: 'static, S>(
+#[cfg_attr(feature = "trace", tracing::instrument(level = "trace", skip(reducer)))]
+pub fn scan<
+    #[cfg(not(feature = "trace"))] I: 'static,
+    #[cfg(feature = "trace")] I: fmt::Debug + 'static,
+    #[cfg(not(feature = "trace"))] O: 'static,
+    #[cfg(feature = "trace")] O: fmt::Debug + 'static,
+    F: 'static,
+    S,
+>(
     reducer: F,
     seed: O,
 ) -> Box<dyn Fn(S) -> Source<O>>
 where
-    O: Send + Sync + Clone,
-    F: Fn(O, I) -> O + Send + Sync + Clone,
+    O: Clone + Send + Sync,
+    F: Fn(O, I) -> O + Clone + Send + Sync,
     S: Into<Arc<Source<I>>>,
 {
+    #[cfg(feature = "trace")]
+    let scan_fn_span = Span::current();
     Box::new(move |source| {
+        #[cfg(feature = "trace")]
+        let _scan_fn_entered = scan_fn_span.enter();
         let source: Arc<Source<I>> = source.into();
         {
             let reducer = reducer.clone();
             let seed = seed.clone();
+            #[cfg(feature = "trace")]
+            let scan_fn_span = scan_fn_span.clone();
             move |message| {
+                instrument!(follows_from: &scan_fn_span, "scan", scan_span);
+                trace!("from sink: {message:?}");
                 if let Message::Handshake(sink) = message {
                     let acc = ArcSwap::from_pointee(seed.clone());
-                    source(Message::Handshake(Arc::new(
-                        {
-                            let reducer = reducer.clone();
-                            move |message| match message {
-                                Message::Handshake(source) => {
-                                    sink(Message::Handshake(Arc::new(
-                                        (move |message| match message {
-                                            Message::Handshake(_) => {
-                                                panic!("sink handshake has already occurred");
-                                            },
-                                            Message::Data(_) => {
-                                                panic!("sink must not send data");
-                                            },
-                                            Message::Pull => {
-                                                source(Message::Pull);
-                                            },
-                                            Message::Error(error) => {
-                                                source(Message::Error(error));
-                                            },
-                                            Message::Terminate => {
-                                                source(Message::Terminate);
-                                            },
-                                        })
-                                        .into(),
-                                    )));
-                                },
-                                Message::Data(data) => {
-                                    acc.store(Arc::new(reducer((**acc.load()).clone(), data)));
-                                    sink(Message::Data((**acc.load()).clone()));
-                                },
-                                Message::Pull => {
-                                    panic!("source must not pull");
-                                },
-                                Message::Error(error) => {
-                                    sink(Message::Error(error));
-                                },
-                                Message::Terminate => {
-                                    sink(Message::Terminate);
-                                },
+                    call!(
+                        source,
+                        Message::Handshake(Arc::new(
+                            {
+                                let reducer = reducer.clone();
+                                #[cfg(feature = "trace")]
+                                let scan_span = scan_span.clone();
+                                move |message| {
+                                    instrument!(parent: &scan_span, "source_talkback");
+                                    trace!("from source: {message:?}");
+                                    match message {
+                                        Message::Handshake(source) => {
+                                            call!(
+                                                sink,
+                                                Message::Handshake(Arc::new(
+                                                    {
+                                                        #[cfg(feature = "trace")]
+                                                        let scan_span = scan_span.clone();
+                                                        move |message| {
+                                                            instrument!(
+                                                                parent: &scan_span,
+                                                                "sink_talkback"
+                                                            );
+                                                            trace!("from sink: {message:?}");
+                                                            match message {
+                                                                Message::Handshake(_) => {
+                                                                    panic!(
+                                                            "sink handshake has already occurred"
+                                                        );
+                                                                },
+                                                                Message::Data(_) => {
+                                                                    panic!(
+                                                                        "sink must not send data"
+                                                                    );
+                                                                },
+                                                                Message::Pull => {
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Pull,
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                                Message::Error(error) => {
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Error(error),
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                                Message::Terminate => {
+                                                                    call!(
+                                                                        source,
+                                                                        Message::Terminate,
+                                                                        "to source: {message:?}"
+                                                                    );
+                                                                },
+                                                            }
+                                                        }
+                                                    }
+                                                    .into(),
+                                                )),
+                                                "to sink: {message:?}"
+                                            );
+                                        },
+                                        Message::Data(data) => {
+                                            acc.store(Arc::new(reducer(
+                                                (**acc.load()).clone(),
+                                                data,
+                                            )));
+                                            call!(
+                                                sink,
+                                                Message::Data((**acc.load()).clone()),
+                                                "to sink: {message:?}"
+                                            );
+                                        },
+                                        Message::Pull => {
+                                            panic!("source must not pull");
+                                        },
+                                        Message::Error(error) => {
+                                            call!(
+                                                sink,
+                                                Message::Error(error),
+                                                "to sink: {message:?}"
+                                            );
+                                        },
+                                        Message::Terminate => {
+                                            call!(sink, Message::Terminate, "to sink: {message:?}");
+                                        },
+                                    }
+                                }
                             }
-                        }
-                        .into(),
-                    )));
+                            .into(),
+                        )),
+                        "to source: {message:?}"
+                    );
                 }
             }
         }

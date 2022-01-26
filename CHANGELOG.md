@@ -2,6 +2,10 @@
 
 ##  Unreleased
 
+### Added
+
+-   Add `trace` feature to crate
+
 ##  v0.14.0 - 2022-01-14
 
 ### Changed

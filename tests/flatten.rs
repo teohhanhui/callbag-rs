@@ -4,9 +4,12 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering as AtomicOrdering},
     Arc, RwLock,
 };
-use tracing::info;
+use tracing::{info, Span};
 
-use crate::common::{array_queue, VariantName};
+use crate::{
+    common::{array_queue, VariantName},
+    utils::{call, tracing::instrument},
+};
 
 use callbag::{flatten, map, Message, Source};
 
@@ -21,6 +24,7 @@ use {
         sync::{atomic::AtomicBool, Condvar, Mutex},
         time::Duration,
     },
+    tracing::info_span,
     tracing_futures::Instrument,
 };
 
@@ -33,6 +37,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 pub mod common;
+pub mod utils;
 
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -52,8 +57,8 @@ wasm_bindgen_test_configure!(run_in_browser);
     wasm_bindgen_test
 )]
 async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let downwards_expected_types = Arc::new(array_queue![
         "Handshake",
@@ -71,49 +76,70 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
         let source_outer_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_outer = Arc::new(
             {
+                let test_fn_span = test_fn_span.clone();
                 let nursery = nursery.clone();
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
-                    info!("up (outer): {message:?}");
+                    instrument!(parent: &test_fn_span, "source_outer", source_outer_span);
+                    info!("from sink: {message:?}");
                     if let Message::Handshake(sink) = message {
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(230);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Data("a"));
-                                }
-                            })
-                            .unwrap();
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(460);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Data("b"));
-                                }
-                            })
-                            .unwrap();
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(690);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Terminate);
-                                }
-                            })
-                            .unwrap();
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(230);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(sink, Message::Data("a"), "to sink: {message:?}");
+                                    }
+                                })
+                                .unwrap();
+                        }
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(460);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(sink, Message::Data("b"), "to sink: {message:?}");
+                                    }
+                                })
+                                .unwrap();
+                        }
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(690);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(sink, Message::Terminate, "to sink: {message:?}");
+                                    }
+                                })
+                                .unwrap();
+                        }
                         let source_outer = {
                             let source_outer_ref = &mut *source_outer_ref.write().unwrap();
                             source_outer_ref.take().unwrap()
                         };
-                        sink(Message::Handshake(source_outer));
+                        call!(
+                            sink,
+                            Message::Handshake(source_outer),
+                            "to sink: {message:?}"
+                        );
                     }
                 }
             }
@@ -128,45 +154,60 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
 
     let source_inner = Arc::new(
         {
+            let test_fn_span = test_fn_span.clone();
             let nursery = nursery.clone();
             move |message| {
-                info!("up (inner): {message:?}");
+                instrument!(parent: &test_fn_span, "source_inner", source_inner_span);
+                info!("from sink: {message:?}");
                 if let Message::Handshake(sink) = message {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
-                    nursery
-                        .nurse({
-                            let nursery = nursery.clone();
-                            let sink = Arc::clone(&sink);
-                            let interval_cleared = Arc::clone(&interval_cleared);
-                            const DURATION: Duration = Duration::from_millis(100);
-                            async move {
-                                loop {
-                                    nursery.sleep(DURATION).await;
-                                    if interval_cleared.load(AtomicOrdering::Acquire) {
-                                        break;
+                    {
+                        let nursery = nursery
+                            .clone()
+                            .instrument(info_span!(parent: &source_inner_span, "async_task"));
+                        nursery
+                            .nurse({
+                                let nursery = nursery.clone();
+                                let sink = Arc::clone(&sink);
+                                let interval_cleared = Arc::clone(&interval_cleared);
+                                const DURATION: Duration = Duration::from_millis(100);
+                                async move {
+                                    loop {
+                                        nursery.sleep(DURATION).await;
+                                        if interval_cleared.load(AtomicOrdering::Acquire) {
+                                            break;
+                                        }
+                                        let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
+                                        call!(sink, Message::Data(i), "to sink: {message:?}");
+                                        if i == 4 {
+                                            interval_cleared.store(true, AtomicOrdering::Release);
+                                            call!(sink, Message::Terminate, "to sink: {message:?}");
+                                            break;
+                                        }
                                     }
-                                    let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                    sink(Message::Data(i));
-                                    if i == 4 {
+                                }
+                            })
+                            .unwrap();
+                    }
+                    call!(
+                        sink,
+                        Message::Handshake(Arc::new(
+                            {
+                                let source_inner_span = source_inner_span.clone();
+                                move |message| {
+                                    instrument!(parent: &source_inner_span, "sink_talkback");
+                                    info!("from sink: {message:?}");
+                                    let interval_cleared = Arc::clone(&interval_cleared);
+                                    if let Message::Error(_) | Message::Terminate = message {
                                         interval_cleared.store(true, AtomicOrdering::Release);
-                                        sink(Message::Terminate);
-                                        break;
                                     }
                                 }
                             }
-                        })
-                        .unwrap();
-                    sink(Message::Handshake(Arc::new(
-                        (move |message| {
-                            info!("up (inner): {message:?}");
-                            let interval_cleared = Arc::clone(&interval_cleared);
-                            if let Message::Error(_) | Message::Terminate = message {
-                                interval_cleared.store(true, AtomicOrdering::Release);
-                            }
-                        })
-                        .into(),
-                    )));
+                            .into(),
+                        )),
+                        "to sink: {message:?}"
+                    );
                 }
             }
         }
@@ -175,7 +216,8 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
 
     let sink = Arc::new(
         (move |message: Message<_, Never>| {
-            info!("down: {message:?}");
+            instrument!(parent: &test_fn_span, "sink");
+            info!("from source: {message:?}");
             {
                 let et = downwards_expected_types.pop().unwrap();
                 assert_eq!(
@@ -193,9 +235,9 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
     );
 
     let source = flatten(map(move |str| {
-        map(move |num| format!("{}{}", str, num))(Arc::clone(&source_inner))
+        map(move |num| format!("{str}{num}"))(Arc::clone(&source_inner))
     })(source_outer));
-    source(Message::Handshake(sink));
+    call!(source, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(1_200), nursery_out);
     drop(nursery);
@@ -210,6 +252,8 @@ async fn it_flattens_a_two_layer_async_infinite_listenable_sources() {
     wasm_bindgen_test
 )]
 fn it_flattens_a_two_layer_finite_pullable_sources() {
+    let test_fn_span = Span::current();
+
     let upwards_expected_outer = Arc::new(array_queue!["Pull", "Pull", "Pull"]);
     let upwards_expected_inner = Arc::new(array_queue![
         "Pull", "Pull", "Pull", "Pull", "Pull", "Pull", "Pull", "Pull",
@@ -233,9 +277,11 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
         let outer_source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let outer_source = Arc::new(
             {
+                let test_fn_span = test_fn_span.clone();
                 let outer_source_ref = Arc::clone(&outer_source_ref);
                 move |message| {
-                    info!("up (outer): {message:?}");
+                    instrument!(parent: &test_fn_span, "outer_source");
+                    info!("from sink: {message:?}");
                     if let Message::Handshake(sink) = message {
                         outer_sink.store(Some(sink));
                         let outer_sink = outer_sink.load();
@@ -244,7 +290,11 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
                             let outer_source_ref = &mut *outer_source_ref.write().unwrap();
                             outer_source_ref.take().unwrap()
                         };
-                        outer_sink(Message::Handshake(outer_source));
+                        call!(
+                            outer_sink,
+                            Message::Handshake(outer_source),
+                            "to sink: {message:?}"
+                        );
                         return;
                     }
                     assert!(
@@ -263,20 +313,20 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
                         outer_sent.fetch_add(1, AtomicOrdering::AcqRel);
                         let outer_sink = outer_sink.load();
                         let outer_sink = outer_sink.as_ref().unwrap();
-                        outer_sink(Message::Data("a"));
+                        call!(outer_sink, Message::Data("a"), "to sink: {message:?}");
                         return;
                     }
                     if outer_sent.load(AtomicOrdering::Acquire) == 1 {
                         outer_sent.fetch_add(1, AtomicOrdering::AcqRel);
                         let outer_sink = outer_sink.load();
                         let outer_sink = outer_sink.as_ref().unwrap();
-                        outer_sink(Message::Data("b"));
+                        call!(outer_sink, Message::Data("b"), "to sink: {message:?}");
                         return;
                     }
                     if outer_sent.load(AtomicOrdering::Acquire) == 2 {
                         let outer_sink = outer_sink.load();
                         let outer_sink = outer_sink.as_ref().unwrap();
-                        outer_sink(Message::Terminate);
+                        call!(outer_sink, Message::Terminate, "to sink: {message:?}");
                     }
                 }
             }
@@ -289,80 +339,89 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
         outer_source
     };
 
-    let make_inner_source = move || {
-        let inner_sent = Arc::new(AtomicUsize::new(0));
-        let inner_sink = Arc::new(ArcSwapOption::from(None));
-        let inner_source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
-        let inner_source = Arc::new(
-            {
-                let inner_source_ref = Arc::clone(&inner_source_ref);
-                move |message| {
-                    info!("up (inner): {message:?}");
-                    if let Message::Handshake(sink) = message {
-                        inner_sink.store(Some(sink));
-                        let inner_sink = inner_sink.load();
-                        let inner_sink = inner_sink.as_ref().unwrap();
-                        let inner_source = {
-                            let inner_source_ref = &mut *inner_source_ref.write().unwrap();
-                            inner_source_ref.take().unwrap()
-                        };
-                        inner_sink(Message::Handshake(inner_source));
-                        return;
-                    }
-                    assert!(
-                        !upwards_expected_inner.is_empty(),
-                        "inner source should be pulled"
-                    );
-                    {
-                        let e = upwards_expected_inner.pop().unwrap();
-                        assert_eq!(
-                            message.variant_name(),
-                            e,
-                            "inner upwards type is expected: {e}"
+    let make_inner_source = {
+        let test_fn_span = test_fn_span.clone();
+        move || {
+            let inner_sent = Arc::new(AtomicUsize::new(0));
+            let inner_sink = Arc::new(ArcSwapOption::from(None));
+            let inner_source_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
+            let inner_source = Arc::new(
+                {
+                    let inner_source_ref = Arc::clone(&inner_source_ref);
+                    move |message| {
+                        instrument!(parent: &test_fn_span, "inner_source");
+                        info!("from sink: {message:?}");
+                        if let Message::Handshake(sink) = message {
+                            inner_sink.store(Some(sink));
+                            let inner_sink = inner_sink.load();
+                            let inner_sink = inner_sink.as_ref().unwrap();
+                            let inner_source = {
+                                let inner_source_ref = &mut *inner_source_ref.write().unwrap();
+                                inner_source_ref.take().unwrap()
+                            };
+                            call!(
+                                inner_sink,
+                                Message::Handshake(inner_source),
+                                "to sink: {message:?}"
+                            );
+                            return;
+                        }
+                        assert!(
+                            !upwards_expected_inner.is_empty(),
+                            "inner source should be pulled"
                         );
-                    }
-                    if inner_sent.load(AtomicOrdering::Acquire) == 0 {
-                        inner_sent.fetch_add(1, AtomicOrdering::AcqRel);
-                        let inner_sink = inner_sink.load();
-                        let inner_sink = inner_sink.as_ref().unwrap();
-                        inner_sink(Message::Data(10));
-                        return;
-                    }
-                    if inner_sent.load(AtomicOrdering::Acquire) == 1 {
-                        inner_sent.fetch_add(1, AtomicOrdering::AcqRel);
-                        let inner_sink = inner_sink.load();
-                        let inner_sink = inner_sink.as_ref().unwrap();
-                        inner_sink(Message::Data(20));
-                        return;
-                    }
-                    if inner_sent.load(AtomicOrdering::Acquire) == 2 {
-                        inner_sent.fetch_add(1, AtomicOrdering::AcqRel);
-                        let inner_sink = inner_sink.load();
-                        let inner_sink = inner_sink.as_ref().unwrap();
-                        inner_sink(Message::Data(30));
-                        return;
-                    }
-                    if inner_sent.load(AtomicOrdering::Acquire) == 3 {
-                        let inner_sink = inner_sink.load();
-                        let inner_sink = inner_sink.as_ref().unwrap();
-                        inner_sink(Message::Terminate);
+                        {
+                            let e = upwards_expected_inner.pop().unwrap();
+                            assert_eq!(
+                                message.variant_name(),
+                                e,
+                                "inner upwards type is expected: {e}"
+                            );
+                        }
+                        if inner_sent.load(AtomicOrdering::Acquire) == 0 {
+                            inner_sent.fetch_add(1, AtomicOrdering::AcqRel);
+                            let inner_sink = inner_sink.load();
+                            let inner_sink = inner_sink.as_ref().unwrap();
+                            call!(inner_sink, Message::Data(10), "to sink: {message:?}");
+                            return;
+                        }
+                        if inner_sent.load(AtomicOrdering::Acquire) == 1 {
+                            inner_sent.fetch_add(1, AtomicOrdering::AcqRel);
+                            let inner_sink = inner_sink.load();
+                            let inner_sink = inner_sink.as_ref().unwrap();
+                            call!(inner_sink, Message::Data(20), "to sink: {message:?}");
+                            return;
+                        }
+                        if inner_sent.load(AtomicOrdering::Acquire) == 2 {
+                            inner_sent.fetch_add(1, AtomicOrdering::AcqRel);
+                            let inner_sink = inner_sink.load();
+                            let inner_sink = inner_sink.as_ref().unwrap();
+                            call!(inner_sink, Message::Data(30), "to sink: {message:?}");
+                            return;
+                        }
+                        if inner_sent.load(AtomicOrdering::Acquire) == 3 {
+                            let inner_sink = inner_sink.load();
+                            let inner_sink = inner_sink.as_ref().unwrap();
+                            call!(inner_sink, Message::Terminate, "to sink: {message:?}");
+                        }
                     }
                 }
+                .into(),
+            );
+            {
+                let mut inner_source_ref = inner_source_ref.write().unwrap();
+                *inner_source_ref = Some(Arc::clone(&inner_source));
             }
-            .into(),
-        );
-        {
-            let mut inner_source_ref = inner_source_ref.write().unwrap();
-            *inner_source_ref = Some(Arc::clone(&inner_source));
+            inner_source
         }
-        inner_source
     };
 
     let sink = Arc::new(
         {
             let talkback = ArcSwapOption::from(None);
             move |message: Message<_, Never>| {
-                info!("down: {message:?}");
+                instrument!(parent: &test_fn_span, "sink");
+                info!("from source: {message:?}");
                 {
                     let et = downwards_expected_types.pop().unwrap();
                     assert_eq!(
@@ -375,7 +434,7 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
                     talkback.store(Some(source));
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
+                    call!(talkback, Message::Pull, "to source: {message:?}");
                 } else if let Message::Data(data) = message {
                     {
                         let e = downwards_expected.pop().unwrap();
@@ -383,7 +442,7 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
                     }
                     let talkback = talkback.load();
                     let talkback = talkback.as_ref().unwrap();
-                    talkback(Message::Pull);
+                    call!(talkback, Message::Pull, "to source: {message:?}");
                 }
             }
         }
@@ -391,9 +450,9 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
     );
 
     let source = flatten(map(move |str| {
-        map(move |num| format!("{}{}", str, num))(make_inner_source.clone()())
+        map(move |num| format!("{str}{num}"))(make_inner_source.clone()())
     })(outer_source));
-    source(Message::Handshake(sink));
+    call!(source, Message::Handshake(sink), "to source: {message:?}");
 }
 
 /// See <https://github.com/staltz/callbag-flatten/blob/9d08c8807802243517697dd7401a9d5d2ba69c24/test.js#L247-L318>
@@ -408,8 +467,8 @@ fn it_flattens_a_two_layer_finite_pullable_sources() {
     wasm_bindgen_test
 )]
 async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let inner_expected_types = Arc::new(array_queue!["Handshake", "Handshake", "Terminate"]);
     let downwards_expected_types = Arc::new(array_queue![
@@ -426,53 +485,78 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
         let source_outer_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_outer = Arc::new(
             {
+                let test_fn_span = test_fn_span.clone();
                 let nursery = nursery.clone();
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message| {
-                    info!("up (outer): {message:?}");
+                    instrument!(parent: &test_fn_span, "source_outer", source_outer_span);
+                    info!("from sink: {message:?}");
                     if let Message::Handshake(sink) = message {
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(230);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Data("a"));
-                                }
-                            })
-                            .unwrap();
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(460);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Data("b"));
-                                }
-                            })
-                            .unwrap();
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(690);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Error({
-                                        let err: Box<dyn Error + Send + Sync + 'static> =
-                                            "42".into();
-                                        err.into()
-                                    }));
-                                }
-                            })
-                            .unwrap();
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(230);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(sink, Message::Data("a"), "to sink: {message:?}");
+                                    }
+                                })
+                                .unwrap();
+                        }
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(460);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(sink, Message::Data("b"), "to sink: {message:?}");
+                                    }
+                                })
+                                .unwrap();
+                        }
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(690);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(
+                                            sink,
+                                            Message::Error({
+                                                let err: Box<dyn Error + Send + Sync + 'static> =
+                                                    "42".into();
+                                                err.into()
+                                            }),
+                                            "to sink: {message:?}"
+                                        );
+                                    }
+                                })
+                                .unwrap();
+                        }
                         let source_outer = {
                             let source_outer_ref = &mut *source_outer_ref.write().unwrap();
                             source_outer_ref.take().unwrap()
                         };
-                        sink(Message::Handshake(source_outer));
+                        call!(
+                            sink,
+                            Message::Handshake(source_outer),
+                            "to sink: {message:?}"
+                        );
                     }
                 }
             }
@@ -487,9 +571,11 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
 
     let source_inner = Arc::new(
         {
+            let test_fn_span = test_fn_span.clone();
             let nursery = nursery.clone();
             move |message: Message<Never, _>| {
-                info!("up (inner): {message:?}");
+                instrument!(parent: &test_fn_span, "source_inner", source_inner_span);
+                info!("from sink: {message:?}");
                 {
                     let et = inner_expected_types.pop().unwrap();
                     assert_eq!(message.variant_name(), et, "inner type is expected: {et}");
@@ -498,39 +584,52 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
                 if let Message::Handshake(sink) = message {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
-                    nursery
-                        .nurse({
-                            let nursery = nursery.clone();
-                            let sink = Arc::clone(&sink);
-                            let interval_cleared = Arc::clone(&interval_cleared);
-                            const DURATION: Duration = Duration::from_millis(100);
-                            async move {
-                                loop {
-                                    nursery.sleep(DURATION).await;
-                                    if interval_cleared.load(AtomicOrdering::Acquire) {
-                                        break;
+                    {
+                        let nursery = nursery
+                            .clone()
+                            .instrument(info_span!(parent: &source_inner_span, "async_task"));
+                        nursery
+                            .nurse({
+                                let nursery = nursery.clone();
+                                let sink = Arc::clone(&sink);
+                                let interval_cleared = Arc::clone(&interval_cleared);
+                                const DURATION: Duration = Duration::from_millis(100);
+                                async move {
+                                    loop {
+                                        nursery.sleep(DURATION).await;
+                                        if interval_cleared.load(AtomicOrdering::Acquire) {
+                                            break;
+                                        }
+                                        let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
+                                        call!(sink, Message::Data(i), "to sink: {message:?}");
+                                        if i == 4 {
+                                            interval_cleared.store(true, AtomicOrdering::Release);
+                                            call!(sink, Message::Terminate, "to sink: {message:?}");
+                                            break;
+                                        }
                                     }
-                                    let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                    sink(Message::Data(i));
-                                    if i == 4 {
+                                }
+                            })
+                            .unwrap();
+                    }
+                    call!(
+                        sink,
+                        Message::Handshake(Arc::new(
+                            {
+                                let source_inner_span = source_inner_span.clone();
+                                move |message| {
+                                    instrument!(parent: &source_inner_span, "sink_talkback");
+                                    info!("from sink: {message:?}");
+                                    let interval_cleared = Arc::clone(&interval_cleared);
+                                    if let Message::Error(_) | Message::Terminate = message {
                                         interval_cleared.store(true, AtomicOrdering::Release);
-                                        sink(Message::Terminate);
-                                        break;
                                     }
                                 }
                             }
-                        })
-                        .unwrap();
-                    sink(Message::Handshake(Arc::new(
-                        (move |message| {
-                            info!("up (inner): {message:?}");
-                            let interval_cleared = Arc::clone(&interval_cleared);
-                            if let Message::Error(_) | Message::Terminate = message {
-                                interval_cleared.store(true, AtomicOrdering::Release);
-                            }
-                        })
-                        .into(),
-                    )));
+                            .into(),
+                        )),
+                        "to sink: {message:?}"
+                    );
                 }
             }
         }
@@ -539,7 +638,8 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
 
     let sink = Arc::new(
         (move |message: Message<_, Never>| {
-            info!("down: {message:?}");
+            instrument!(parent: &test_fn_span, "sink");
+            info!("from source: {message:?}");
             {
                 let et = downwards_expected_types.pop().unwrap();
                 assert_eq!(
@@ -557,9 +657,9 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
     );
 
     let source = flatten(map(move |str| {
-        map(move |num| format!("{}{}", str, num))(Arc::clone(&source_inner))
+        map(move |num| format!("{str}{num}"))(Arc::clone(&source_inner))
     })(source_outer));
-    source(Message::Handshake(sink));
+    call!(source, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(1_200), nursery_out);
     drop(nursery);
@@ -578,8 +678,8 @@ async fn it_errors_sink_and_unsubscribe_from_inner_when_outer_throws() {
     wasm_bindgen_test
 )]
 async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
 
     let outer_expected_types = Arc::new(array_queue!["Handshake", "Terminate"]);
     let downwards_expected_types = Arc::new(array_queue![
@@ -598,43 +698,59 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
         let source_outer_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_outer = Arc::new(
             {
+                let test_fn_span = test_fn_span.clone();
                 let nursery = nursery.clone();
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message: Message<Never, _>| {
-                    info!("up (outer): {message:?}");
+                    instrument!(parent: &test_fn_span, "source_outer", source_outer_span);
+                    info!("from sink: {message:?}");
                     {
                         let et = outer_expected_types.pop().unwrap();
                         assert_eq!(message.variant_name(), et, "outer type is expected: {et}");
                     }
 
                     if let Message::Handshake(sink) = message {
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(230);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Data("a"));
-                                }
-                            })
-                            .unwrap();
-                        nursery
-                            .nurse({
-                                let nursery = nursery.clone();
-                                let sink = Arc::clone(&sink);
-                                const DURATION: Duration = Duration::from_millis(460);
-                                async move {
-                                    nursery.sleep(DURATION).await;
-                                    sink(Message::Data("b"));
-                                }
-                            })
-                            .unwrap();
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(230);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(sink, Message::Data("a"), "to sink: {message:?}");
+                                    }
+                                })
+                                .unwrap();
+                        }
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_outer_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let nursery = nursery.clone();
+                                    let sink = Arc::clone(&sink);
+                                    const DURATION: Duration = Duration::from_millis(460);
+                                    async move {
+                                        nursery.sleep(DURATION).await;
+                                        call!(sink, Message::Data("b"), "to sink: {message:?}");
+                                    }
+                                })
+                                .unwrap();
+                        }
                         let source_outer = {
                             let source_outer_ref = &mut *source_outer_ref.write().unwrap();
                             source_outer_ref.take().unwrap()
                         };
-                        sink(Message::Handshake(source_outer));
+                        call!(
+                            sink,
+                            Message::Handshake(source_outer),
+                            "to sink: {message:?}"
+                        );
                     }
                 }
             }
@@ -649,49 +765,69 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 
     let source_inner = Arc::new(
         {
+            let test_fn_span = test_fn_span.clone();
             let nursery = nursery.clone();
             move |message| {
-                info!("up (inner): {message:?}");
+                instrument!(parent: &test_fn_span, "source_inner", source_inner_span);
+                info!("from sink: {message:?}");
                 if let Message::Handshake(sink) = message {
                     let i = Arc::new(AtomicUsize::new(0));
                     let interval_cleared = Arc::new(AtomicBool::new(false));
-                    nursery
-                        .nurse({
-                            let nursery = nursery.clone();
-                            let sink = Arc::clone(&sink);
-                            let interval_cleared = Arc::clone(&interval_cleared);
-                            const DURATION: Duration = Duration::from_millis(100);
-                            async move {
-                                loop {
-                                    nursery.sleep(DURATION).await;
-                                    if interval_cleared.load(AtomicOrdering::Acquire) {
-                                        break;
+                    {
+                        let nursery = nursery
+                            .clone()
+                            .instrument(info_span!(parent: &source_inner_span, "async_task"));
+                        nursery
+                            .nurse({
+                                let nursery = nursery.clone();
+                                let sink = Arc::clone(&sink);
+                                let interval_cleared = Arc::clone(&interval_cleared);
+                                const DURATION: Duration = Duration::from_millis(100);
+                                async move {
+                                    loop {
+                                        nursery.sleep(DURATION).await;
+                                        if interval_cleared.load(AtomicOrdering::Acquire) {
+                                            break;
+                                        }
+                                        let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
+                                        call!(sink, Message::Data(i), "to sink: {message:?}");
+                                        if i == 4 {
+                                            interval_cleared.store(true, AtomicOrdering::Release);
+                                            call!(
+                                                sink,
+                                                Message::Error({
+                                                    let err: Box<
+                                                        dyn Error + Send + Sync + 'static,
+                                                    > = "42".into();
+                                                    err.into()
+                                                }),
+                                                "to sink: {message:?}"
+                                            );
+                                            break;
+                                        }
                                     }
-                                    let i = i.fetch_add(1, AtomicOrdering::AcqRel) + 1;
-                                    sink(Message::Data(i));
-                                    if i == 4 {
+                                }
+                            })
+                            .unwrap();
+                    }
+                    call!(
+                        sink,
+                        Message::Handshake(Arc::new(
+                            {
+                                let source_inner_span = source_inner_span.clone();
+                                move |message| {
+                                    instrument!(parent: &source_inner_span, "sink_talkback");
+                                    info!("from sink: {message:?}");
+                                    let interval_cleared = Arc::clone(&interval_cleared);
+                                    if let Message::Error(_) | Message::Terminate = message {
                                         interval_cleared.store(true, AtomicOrdering::Release);
-                                        sink(Message::Error({
-                                            let err: Box<dyn Error + Send + Sync + 'static> =
-                                                "42".into();
-                                            err.into()
-                                        }));
-                                        break;
                                     }
                                 }
                             }
-                        })
-                        .unwrap();
-                    sink(Message::Handshake(Arc::new(
-                        (move |message| {
-                            info!("up (inner): {message:?}");
-                            let interval_cleared = Arc::clone(&interval_cleared);
-                            if let Message::Error(_) | Message::Terminate = message {
-                                interval_cleared.store(true, AtomicOrdering::Release);
-                            }
-                        })
-                        .into(),
-                    )));
+                            .into(),
+                        )),
+                        "to sink: {message:?}"
+                    );
                 }
             }
         }
@@ -700,7 +836,8 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 
     let sink = Arc::new(
         (move |message: Message<_, Never>| {
-            info!("down: {message:?}");
+            instrument!(parent: &test_fn_span, "sink");
+            info!("from source: {message:?}");
             {
                 let et = downwards_expected_types.pop().unwrap();
                 assert_eq!(
@@ -718,9 +855,9 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
     );
 
     let source = flatten(map(move |str| {
-        map(move |num| format!("{}{}", str, num))(Arc::clone(&source_inner))
+        map(move |num| format!("{str}{num}"))(Arc::clone(&source_inner))
     })(source_outer));
-    source(Message::Handshake(sink));
+    call!(source, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(1_200), nursery_out);
     drop(nursery);
@@ -740,8 +877,8 @@ async fn it_errors_sink_and_unsubscribe_from_outer_when_inner_throws() {
 )]
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for_inner_completion()
 {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
     #[allow(clippy::mutex_atomic)]
     let ready_pair = Arc::new((Mutex::new(false), Condvar::new()));
 
@@ -752,10 +889,12 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
         let source_outer_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_outer = Arc::new(
             {
+                let test_fn_span = test_fn_span.clone();
                 let ready_pair = Arc::clone(&ready_pair);
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message: Message<Never, _>| {
-                    info!("up (outer): {message:?}");
+                    instrument!(parent: &test_fn_span, "source_outer");
+                    info!("from sink: {message:?}");
                     {
                         let et = outer_expected_types.pop().unwrap();
                         assert_eq!(message.variant_name(), et, "outer type is expected: {et}");
@@ -767,10 +906,14 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                                 let source_outer_ref = &mut *source_outer_ref.write().unwrap();
                                 source_outer_ref.take().unwrap()
                             };
-                            sink(Message::Handshake(source_outer));
+                            call!(
+                                sink,
+                                Message::Handshake(source_outer),
+                                "to sink: {message:?}"
+                            );
                         }
-                        sink(Message::Data(true));
-                        sink(Message::Terminate);
+                        call!(sink, Message::Data(true), "to sink: {message:?}");
+                        call!(sink, Message::Terminate, "to sink: {message:?}");
                         {
                             let (lock, cvar) = &*ready_pair;
                             let mut ready = lock.lock().unwrap();
@@ -793,7 +936,8 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
         {
             let nursery = nursery.clone();
             move |message: Message<_, Never>| {
-                info!("down: {message:?}");
+                instrument!(parent: &test_fn_span, "sink", sink_span);
+                info!("from source: {message:?}");
                 {
                     let et = downwards_expected_types.pop().unwrap();
                     assert_eq!(
@@ -804,21 +948,26 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
                 }
                 if let Message::Handshake(source) = message {
                     let talkback = source;
-                    nursery
-                        .nurse({
-                            let ready_pair = Arc::clone(&ready_pair);
-                            async move {
-                                {
-                                    let (lock, cvar) = &*ready_pair;
-                                    let mut ready = lock.lock().unwrap();
-                                    while !*ready {
-                                        ready = cvar.wait(ready).unwrap();
+                    {
+                        let nursery = nursery
+                            .clone()
+                            .instrument(info_span!(parent: &sink_span, "async_task"));
+                        nursery
+                            .nurse({
+                                let ready_pair = Arc::clone(&ready_pair);
+                                async move {
+                                    {
+                                        let (lock, cvar) = &*ready_pair;
+                                        let mut ready = lock.lock().unwrap();
+                                        while !*ready {
+                                            ready = cvar.wait(ready).unwrap();
+                                        }
                                     }
+                                    call!(talkback, Message::Terminate, "to source: {message:?}");
                                 }
-                                talkback(Message::Terminate);
-                            }
-                        })
-                        .unwrap();
+                            })
+                            .unwrap();
+                    }
                 }
             }
         }
@@ -829,7 +978,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
         let never: Arc<Source<Never>> = Arc::new(never.into());
         never
     })(source_outer));
-    source(Message::Handshake(sink));
+    call!(source, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(100), nursery_out);
     drop(nursery);
@@ -848,8 +997,8 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_waiting_for
     wasm_bindgen_test
 )]
 async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_errors() {
+    let test_fn_span = Span::current();
     let (nursery, nursery_out) = Nursery::new(async_executors::AsyncStd);
-    let nursery = nursery.in_current_span();
     #[allow(clippy::mutex_atomic)]
     let ready_pair = Arc::new((Mutex::new(false), Condvar::new()));
 
@@ -860,10 +1009,12 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
         let source_outer_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_outer = Arc::new(
             {
+                let test_fn_span = test_fn_span.clone();
                 let ready_pair = Arc::clone(&ready_pair);
                 let source_outer_ref = Arc::clone(&source_outer_ref);
                 move |message: Message<Never, _>| {
-                    info!("up (outer): {message:?}");
+                    instrument!(parent: &test_fn_span, "source_outer");
+                    info!("from sink: {message:?}");
                     {
                         let et = outer_expected_types.pop().unwrap();
                         assert_eq!(message.variant_name(), et, "outer type is expected: {et}");
@@ -875,10 +1026,14 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
                                 let source_outer_ref = &mut *source_outer_ref.write().unwrap();
                                 source_outer_ref.take().unwrap()
                             };
-                            sink(Message::Handshake(source_outer));
+                            call!(
+                                sink,
+                                Message::Handshake(source_outer),
+                                "to sink: {message:?}"
+                            );
                         }
-                        sink(Message::Data(true));
-                        sink(Message::Terminate);
+                        call!(sink, Message::Data(true), "to sink: {message:?}");
+                        call!(sink, Message::Terminate, "to sink: {message:?}");
                         {
                             let (lock, cvar) = &*ready_pair;
                             let mut ready = lock.lock().unwrap();
@@ -901,37 +1056,52 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
         let source_inner_ref: Arc<RwLock<Option<Arc<Source<_>>>>> = Arc::new(RwLock::new(None));
         let source_inner = Arc::new(
             {
+                let test_fn_span = test_fn_span.clone();
                 let nursery = nursery.clone();
                 let source_inner_ref = Arc::clone(&source_inner_ref);
                 move |message: Message<Never, Never>| {
-                    info!("up (inner): {message:?}");
+                    instrument!(parent: &test_fn_span, "source_inner", source_inner_span);
+                    info!("from sink: {message:?}");
                     if let Message::Handshake(sink) = message {
                         {
                             let source_inner = {
                                 let source_inner_ref = &mut *source_inner_ref.write().unwrap();
                                 source_inner_ref.take().unwrap()
                             };
-                            sink(Message::Handshake(source_inner));
+                            call!(
+                                sink,
+                                Message::Handshake(source_inner),
+                                "to sink: {message:?}"
+                            );
                         }
-                        nursery
-                            .nurse({
-                                let ready_pair = Arc::clone(&ready_pair);
-                                async move {
-                                    {
-                                        let (lock, cvar) = &*ready_pair;
-                                        let mut ready = lock.lock().unwrap();
-                                        while !*ready {
-                                            ready = cvar.wait(ready).unwrap();
+                        {
+                            let nursery = nursery
+                                .clone()
+                                .instrument(info_span!(parent: &source_inner_span, "async_task"));
+                            nursery
+                                .nurse({
+                                    let ready_pair = Arc::clone(&ready_pair);
+                                    async move {
+                                        {
+                                            let (lock, cvar) = &*ready_pair;
+                                            let mut ready = lock.lock().unwrap();
+                                            while !*ready {
+                                                ready = cvar.wait(ready).unwrap();
+                                            }
                                         }
+                                        call!(
+                                            sink,
+                                            Message::Error({
+                                                let err: Box<dyn Error + Send + Sync + 'static> =
+                                                    "true".into();
+                                                err.into()
+                                            }),
+                                            "to sink: {message:?}"
+                                        );
                                     }
-                                    sink(Message::Error({
-                                        let err: Box<dyn Error + Send + Sync + 'static> =
-                                            "true".into();
-                                        err.into()
-                                    }));
-                                }
-                            })
-                            .unwrap();
+                                })
+                                .unwrap();
+                        }
                     }
                 }
             }
@@ -946,7 +1116,8 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
 
     let sink = Arc::new(
         (move |message: Message<_, Never>| {
-            info!("down: {message:?}");
+            instrument!(parent: &test_fn_span, "sink");
+            info!("from source: {message:?}");
             let et = downwards_expected_types.pop().unwrap();
             assert_eq!(
                 message.variant_name(),
@@ -958,7 +1129,7 @@ async fn it_should_not_try_to_unsubscribe_from_completed_source_when_for_inner_e
     );
 
     let source = flatten(map(move |_| Arc::clone(&source_inner))(source_outer));
-    source(Message::Handshake(sink));
+    call!(source, Message::Handshake(sink), "to source: {message:?}");
 
     let nursery_out = nursery.timeout(Duration::from_millis(100), nursery_out);
     drop(nursery);

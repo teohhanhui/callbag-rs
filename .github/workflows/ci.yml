@@ -12,7 +12,7 @@ env:
   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -Dwarnings # https://github.com/rust-lang/cargo/issues/4423#issuecomment-404188918
   CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -Dwarnings # https://github.com/rust-lang/cargo/issues/4423#issuecomment-404188918
   RUST_BACKTRACE: short
-  RUST_LOG: info
+  RUST_LOG: callbag=trace,info
   RUSTFLAGS: -Dwarnings
 
 jobs:
@@ -93,11 +93,11 @@ jobs:
         with:
           command: test
           toolchain: ${{ matrix.rust }}
-          args: --no-fail-fast -- --show-output --test-threads=1
+          args: --no-fail-fast --features trace_futures -- --nocapture --test-threads=1
       - name: Install wasm-pack
         uses: ./.github/actions/install-wasm-pack
-      - name: Run tests (wasm32-unknown-unknown) (Node.js)
-        run: rustup run ${{ matrix.rust }} wasm-pack test --node
+      - name: Run tests (wasm32-unknown-unknown, node)
+        run: rustup run ${{ matrix.rust }} wasm-pack test --node -- --features trace_futures
       - name: Install cargo-wasi
         uses: ./.github/actions/cargo
         with:
@@ -110,7 +110,7 @@ jobs:
         with:
           command: wasi
           toolchain: ${{ matrix.rust }}
-          args: test --no-fail-fast -- --show-output --test-threads=1
+          args: test --no-fail-fast --features trace -- --nocapture --test-threads=1
       - name: Run doctests
         uses: ./.github/actions/cargo
         with:
@@ -153,4 +153,4 @@ jobs:
         with:
           command: fmt
           toolchain: stable
-          args: -- --check
+          args: --check

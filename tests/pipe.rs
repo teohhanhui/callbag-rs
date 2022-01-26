@@ -1,6 +1,7 @@
 use std::sync::Arc;
+use tracing::{info, Span};
 
-use crate::common::array_queue;
+use crate::{common::array_queue, utils::tracing::instrument};
 
 use callbag::{filter, for_each, from_iter, map, pipe};
 
@@ -13,6 +14,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 pub mod common;
+pub mod utils;
 
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -65,12 +67,16 @@ fn it_calls_first_order_functions_in_a_nested_pipe() {
     wasm_bindgen_test
 )]
 fn it_can_be_used_with_common_callbag_utilities() {
+    let test_fn_span = Span::current();
+
     let expected = Arc::new(array_queue![1, 3]);
     pipe!(
         from_iter([10, 20, 30, 40]),
         map(|x| x / 10),
         filter(|x| x % 2 != 0),
         for_each(move |x| {
+            instrument!(parent: &test_fn_span, "sink");
+            info!("from source: {x}");
             assert_eq!(x, expected.pop().unwrap());
         }),
     );
@@ -84,11 +90,15 @@ fn it_can_be_used_with_common_callbag_utilities() {
     wasm_bindgen_test
 )]
 fn it_can_be_nested_with_callbag_utilities() {
+    let test_fn_span = Span::current();
+
     let expected = Arc::new(array_queue![1, 3]);
     pipe!(
         from_iter([10, 20, 30, 40]),
         |s| pipe!(s, map(|x| x / 10), filter(|x| x % 2 != 0)),
         for_each(move |x| {
+            instrument!(parent: &test_fn_span, "sink");
+            info!("from source: {x}");
             assert_eq!(x, expected.pop().unwrap());
         }),
     );
