@@ -10,7 +10,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag operator that broadcasts a single source to multiple sinks.
@@ -164,12 +164,12 @@ use {std::fmt, tracing::Span};
 /// ```
 ///
 /// [rxjs-share]: https://rxjs.dev/api/operators/share
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub fn share<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
-    #[cfg(not(feature = "trace"))] S,
-    #[cfg(feature = "trace")] S: fmt::Debug,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] S,
+    #[cfg(feature = "tracing")] S: fmt::Debug,
 >(
     source: S,
 ) -> Source<T>
@@ -177,7 +177,7 @@ where
     T: Clone,
     S: Into<Arc<Source<T>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let share_fn_span = Span::current();
     let source: Arc<Source<T>> = source.into();
     let sinks = Arc::new(ArcSwap::from_pointee(vec![]));
@@ -204,7 +204,7 @@ where
                     let source_talkback = Arc::clone(&source_talkback);
                     let sink = Arc::clone(&sink);
                     {
-                        #[cfg(feature = "trace")]
+                        #[cfg(feature = "tracing")]
                         let share_span = share_span.clone();
                         move |message| {
                             instrument!(parent: &share_span, "sink_talkback");

@@ -12,7 +12,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag factory that merges data from multiple callbag sources.
@@ -77,20 +77,20 @@ macro_rules! merge {
 /// designed for listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-merge/blob/eefc5930dd5dba5197e4b49dc8ce7dae67be0e6b/readme.js#L29-L60>
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 #[doc(hidden)]
 pub fn merge<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
-    #[cfg(not(feature = "trace"))] S: 'static,
-    #[cfg(feature = "trace")] S: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] S: 'static,
+    #[cfg(feature = "tracing")] S: fmt::Debug + 'static,
 >(
     sources: Box<[S]>,
 ) -> Source<T>
 where
     S: Into<Arc<Source<T>>> + Send + Sync,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let merge_fn_span = Span::current();
     let sources: Box<[Arc<Source<T>>]> = Vec::from(sources).into_iter().map(|s| s.into()).collect();
     (move |message| {
@@ -108,7 +108,7 @@ where
             let ended = Arc::new(AtomicBool::new(false));
             let talkback: Arc<Source<T>> = Arc::new(
                 {
-                    #[cfg(feature = "trace")]
+                    #[cfg(feature = "tracing")]
                     let merge_span = merge_span.clone();
                     let source_talkbacks = Arc::clone(&source_talkbacks);
                     let ended = Arc::clone(&ended);
@@ -163,7 +163,7 @@ where
                     sources[i],
                     Message::Handshake(Arc::new(
                         {
-                            #[cfg(feature = "trace")]
+                            #[cfg(feature = "tracing")]
                             let merge_span = merge_span.clone();
                             let sink = Arc::clone(&sink);
                             let source_talkbacks = Arc::clone(&source_talkbacks);

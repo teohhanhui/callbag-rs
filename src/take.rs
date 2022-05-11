@@ -12,7 +12,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag operator that limits the amount of data sent by a source.
@@ -118,10 +118,10 @@ use {std::fmt, tracing::Span};
 ///     [100, 101, 102, 103]
 /// );
 /// ```
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub fn take<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
     S,
 >(
     max: usize,
@@ -129,14 +129,14 @@ pub fn take<
 where
     S: Into<Arc<Source<T>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let take_fn_span = Span::current();
     Box::new(move |source| {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "tracing")]
         let _take_fn_entered = take_fn_span.enter();
         let source: Arc<Source<T>> = source.into();
         {
-            #[cfg(feature = "trace")]
+            #[cfg(feature = "tracing")]
             let take_fn_span = take_fn_span.clone();
             move |message| {
                 instrument!(follows_from: &take_fn_span, "take", take_span);
@@ -148,7 +148,7 @@ where
                     let end = Arc::new(AtomicBool::new(false));
                     let talkback: Arc<Source<T>> = Arc::new(
                         {
-                            #[cfg(feature = "trace")]
+                            #[cfg(feature = "tracing")]
                             let take_span = take_span.clone();
                             let taken = Arc::clone(&taken);
                             let end = Arc::clone(&end);
@@ -209,7 +209,7 @@ where
                         source,
                         Message::Handshake(Arc::new(
                             {
-                                #[cfg(feature = "trace")]
+                                #[cfg(feature = "tracing")]
                                 let take_span = take_span.clone();
                                 move |message| {
                                     instrument!(parent: &take_span, "source_talkback");

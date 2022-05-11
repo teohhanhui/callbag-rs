@@ -8,7 +8,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag operator that applies a transformation on data passing through it.
@@ -48,12 +48,12 @@ use {std::fmt, tracing::Span};
 ///     [1, 2, 3, 4]
 /// );
 /// ```
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace", skip(f)))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", skip(f)))]
 pub fn map<
-    #[cfg(not(feature = "trace"))] I: 'static,
-    #[cfg(feature = "trace")] I: fmt::Debug + 'static,
-    #[cfg(not(feature = "trace"))] O: 'static,
-    #[cfg(feature = "trace")] O: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] I: 'static,
+    #[cfg(feature = "tracing")] I: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] O: 'static,
+    #[cfg(feature = "tracing")] O: fmt::Debug + 'static,
     F: 'static,
     S,
 >(
@@ -63,15 +63,15 @@ where
     F: Fn(I) -> O + Clone + Send + Sync,
     S: Into<Arc<Source<I>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let map_fn_span = Span::current();
     Box::new(move |source| {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "tracing")]
         let _map_fn_entered = map_fn_span.enter();
         let source: Arc<Source<I>> = source.into();
         {
             let f = f.clone();
-            #[cfg(feature = "trace")]
+            #[cfg(feature = "tracing")]
             let map_fn_span = map_fn_span.clone();
             move |message| {
                 instrument!(follows_from: &map_fn_span, "map", map_span);
@@ -82,7 +82,7 @@ where
                         Message::Handshake(Arc::new(
                             {
                                 let f = f.clone();
-                                #[cfg(feature = "trace")]
+                                #[cfg(feature = "tracing")]
                                 let map_span = map_span.clone();
                                 move |message| {
                                     instrument!(parent: &map_span, "source_talkback");
@@ -93,7 +93,7 @@ where
                                                 sink,
                                                 Message::Handshake(Arc::new(
                                                     {
-                                                        #[cfg(feature = "trace")]
+                                                        #[cfg(feature = "tracing")]
                                                         let map_span = map_span.clone();
                                                         move |message| {
                                                             instrument!(

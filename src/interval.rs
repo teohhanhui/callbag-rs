@@ -16,11 +16,12 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
-use {std::fmt, tracing::Span};
-
-#[cfg(feature = "trace_futures")]
-use {tracing::trace_span, tracing_futures::Instrument};
+#[cfg(feature = "tracing")]
+use {
+    std::fmt,
+    tracing::{trace_span, Span},
+    tracing_futures::Instrument,
+};
 
 /// A callbag listenable source that sends incremental numbers every x milliseconds.
 ///
@@ -65,11 +66,10 @@ use {tracing::trace_span, tracing_futures::Instrument};
 ///     [0, 1, 2, 3]
 /// );
 /// ```
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub fn interval<
-    #[cfg(not(feature = "trace"))] N: 'static,
-    #[cfg(all(feature = "trace", not(feature = "trace_futures")))] N: fmt::Debug + 'static,
-    #[cfg(feature = "trace_futures")] N: Instrument + fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] N: 'static,
+    #[cfg(feature = "tracing")] N: Instrument + fmt::Debug + 'static,
 >(
     period: Duration,
     nursery: N,
@@ -77,7 +77,7 @@ pub fn interval<
 where
     N: Nurse<()> + Timer + Clone + Send + Sync,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let interval_fn_span = Span::current();
     (move |message| {
         instrument!(follows_from: &interval_fn_span, "interval", interval_span);
@@ -85,7 +85,7 @@ where
         if let Message::Handshake(sink) = message {
             let i = AtomicUsize::new(0);
             let interval_cleared = Arc::new(AtomicBool::new(false));
-            #[cfg(feature = "trace_futures")]
+            #[cfg(feature = "tracing")]
             let nursery = nursery
                 .clone()
                 .instrument(trace_span!(parent: &interval_span, "async_task"));
@@ -111,7 +111,7 @@ where
                 sink,
                 Message::Handshake(Arc::new(
                     {
-                        #[cfg(feature = "trace")]
+                        #[cfg(feature = "tracing")]
                         let interval_span = interval_span.clone();
                         move |message| {
                             instrument!(parent: &interval_span, "sink_talkback");

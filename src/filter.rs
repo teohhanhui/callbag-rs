@@ -9,7 +9,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag operator that conditionally lets data pass through.
@@ -50,12 +50,12 @@ use {std::fmt, tracing::Span};
 /// );
 /// ```
 #[cfg_attr(
-    feature = "trace",
+    feature = "tracing",
     tracing::instrument(level = "trace", skip(condition))
 )]
 pub fn filter<
-    #[cfg(not(feature = "trace"))] I: 'static,
-    #[cfg(feature = "trace")] I: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] I: 'static,
+    #[cfg(feature = "tracing")] I: fmt::Debug + 'static,
     F: 'static,
     S,
 >(
@@ -65,15 +65,15 @@ where
     F: Fn(&I) -> bool + Clone + Send + Sync,
     S: Into<Arc<Source<I>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let filter_fn_span = Span::current();
     Box::new(move |source| {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "tracing")]
         let _filter_fn_entered = filter_fn_span.enter();
         let source: Arc<Source<I>> = source.into();
         {
             let condition = condition.clone();
-            #[cfg(feature = "trace")]
+            #[cfg(feature = "tracing")]
             let filter_fn_span = filter_fn_span.clone();
             move |message| {
                 instrument!(follows_from: &filter_fn_span, "filter", filter_span);
@@ -85,7 +85,7 @@ where
                         Message::Handshake(Arc::new(
                             {
                                 let condition = condition.clone();
-                                #[cfg(feature = "trace")]
+                                #[cfg(feature = "tracing")]
                                 let filter_span = filter_span.clone();
                                 move |message| {
                                     instrument!(parent: &filter_span, "source_talkback");
@@ -98,7 +98,7 @@ where
                                                 sink,
                                                 Message::Handshake(Arc::new(
                                                     {
-                                                        #[cfg(feature = "trace")]
+                                                        #[cfg(feature = "tracing")]
                                                         let filter_span = filter_span.clone();
                                                         move |message| {
                                                             instrument!(

@@ -4,7 +4,7 @@
 
 ### Added
 
--   Add `trace` feature to crate
+-   Add `tracing` feature to crate
 
 ##  v0.14.0 - 2022-01-14
 

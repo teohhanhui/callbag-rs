@@ -13,7 +13,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag factory that combines the latest data points from multiple (2 or more) callbag sources.
@@ -103,10 +103,10 @@ macro_rules! combine_impls {
             }
 
             impl<$(
-                #[cfg(not(feature = "trace"))] $T: 'static,
-                #[cfg(feature = "trace")] $T: fmt::Debug + 'static,
-                #[cfg(not(feature = "trace"))] [<S $T>]: 'static,
-                #[cfg(feature = "trace")] [<S $T>]: fmt::Debug + 'static,
+                #[cfg(not(feature = "tracing"))] $T: 'static,
+                #[cfg(feature = "tracing")] $T: fmt::Debug + 'static,
+                #[cfg(not(feature = "tracing"))] [<S $T>]: 'static,
+                #[cfg(feature = "tracing")] [<S $T>]: fmt::Debug + 'static,
             )+> Combine for ($([<S $T>],)+)
             where
                 $(
@@ -116,9 +116,9 @@ macro_rules! combine_impls {
             {
                 type Output = ($($T,)+);
 
-                #[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+                #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
                 fn combine(self) -> Source<Self::Output> {
-                    #[cfg(feature = "trace")]
+                    #[cfg(feature = "tracing")]
                     let combine_fn_span = Span::current();
                     $(
                         let [<source_ $idx>] = self.$idx.into_arc_source();
@@ -141,7 +141,7 @@ macro_rules! combine_impls {
                                 Arc::new(Default::default());
                             let talkback: Arc<Source<Self::Output>> = Arc::new(
                                 {
-                                    #[cfg(feature = "trace")]
+                                    #[cfg(feature = "tracing")]
                                     let combine_span = combine_span.clone();
                                     let source_talkbacks = Arc::clone(&source_talkbacks);
                                     move |message| {
@@ -212,7 +212,7 @@ macro_rules! combine_impls {
                                     [<source_ $idx>],
                                     Message::Handshake(Arc::new(
                                         {
-                                            #[cfg(feature = "trace")]
+                                            #[cfg(feature = "tracing")]
                                             let combine_span = combine_span.clone();
                                             let sink = Arc::clone(&sink);
                                             let n_start = Arc::clone(&n_start);

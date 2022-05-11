@@ -9,7 +9,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag sink that consumes both pullable and listenable sources.
@@ -92,10 +92,10 @@ use {std::fmt, tracing::Span};
 ///     [0, 1, 2, 3]
 /// );
 /// ```
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace", skip(f)))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", skip(f)))]
 pub fn for_each<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
     F: 'static,
     S,
 >(
@@ -105,10 +105,10 @@ where
     F: Fn(T) + Clone + Send + Sync,
     S: Into<Arc<Source<T>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let for_each_fn_span = Span::current();
     Box::new(move |source| {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "tracing")]
         let _for_each_fn_entered = for_each_fn_span.enter();
         let source: Arc<Source<T>> = source.into();
         let talkback = ArcSwapOption::from(None);
@@ -117,7 +117,7 @@ where
             Message::Handshake(Arc::new(
                 {
                     let f = f.clone();
-                    #[cfg(feature = "trace")]
+                    #[cfg(feature = "tracing")]
                     let for_each_fn_span = for_each_fn_span.clone();
                     move |message| {
                         instrument!(follows_from: &for_each_fn_span, "for_each", for_each_span);

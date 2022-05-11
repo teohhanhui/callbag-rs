@@ -14,7 +14,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Converts an [iterable][`IntoIterator`] or [`Iterator`] to a callbag pullable source.
@@ -88,12 +88,12 @@ use {std::fmt, tracing::Span};
 ///     [(0, 10), (1, 20), (2, 30), (3, 40)]
 /// );
 /// ```
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub fn from_iter<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
-    #[cfg(not(feature = "trace"))] I: 'static,
-    #[cfg(feature = "trace")] I: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] I: 'static,
+    #[cfg(feature = "tracing")] I: fmt::Debug + 'static,
 >(
     iter: I,
 ) -> Source<T>
@@ -102,7 +102,7 @@ where
     I: IntoIterator<Item = T> + Clone + Send + Sync,
     <I as IntoIterator>::IntoIter: Send + Sync,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let from_iter_fn_span = Span::current();
     (move |message| {
         instrument!(
@@ -154,7 +154,7 @@ where
                 sink,
                 Message::Handshake(Arc::new(
                     {
-                        #[cfg(feature = "trace")]
+                        #[cfg(feature = "tracing")]
                         let from_iter_span = from_iter_span.clone();
                         move |message| {
                             instrument!(parent: &from_iter_span, "sink_talkback");

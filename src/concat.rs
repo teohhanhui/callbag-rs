@@ -12,7 +12,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag factory that concatenates the data from multiple (2 or more) callbag sources.
@@ -23,20 +23,67 @@ use {std::fmt, tracing::Span};
 /// Works with both pullable and listenable sources.
 ///
 /// See <https://github.com/staltz/callbag-concat/blob/db3ce91a831309057e165f344a87aa1615b4774e/readme.js#L29-L64>
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+///
+/// # Examples
+///
+/// ```
+/// use crossbeam_queue::SegQueue;
+/// use std::sync::Arc;
+///
+/// use callbag::{concat, for_each, from_iter};
+///
+/// let actual = Arc::new(SegQueue::new());
+///
+/// let source = concat!(from_iter(["10", "20", "30"]), from_iter(["a", "b"]));
+///
+/// for_each({
+///     let actual = Arc::clone(&actual);
+///     move |x| {
+///         println!("{x}");
+///         actual.push(x);
+///     }
+/// })(source);
+///
+/// assert_eq!(
+///     &{
+///         let mut v = vec![];
+///         while let Some(x) = actual.pop() {
+///             v.push(x);
+///         }
+///         v
+///     }[..],
+///     ["10", "20", "30", "a", "b"]
+/// );
+/// ```
+#[macro_export]
+macro_rules! concat {
+    ($($s:expr),* $(,)?) => {
+        $crate::concat(::std::vec![$($s),*].into_boxed_slice())
+    };
+}
+
+/// Callbag factory that concatenates the data from multiple (2 or more) callbag sources.
+///
+/// It starts each source at a time: waits for the previous source to end before starting the next
+/// source.
+///
+/// Works with both pullable and listenable sources.
+///
+/// See <https://github.com/staltz/callbag-concat/blob/db3ce91a831309057e165f344a87aa1615b4774e/readme.js#L29-L64>
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 #[doc(hidden)]
 pub fn concat<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
-    #[cfg(not(feature = "trace"))] S: 'static,
-    #[cfg(feature = "trace")] S: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] S: 'static,
+    #[cfg(feature = "tracing")] S: fmt::Debug + 'static,
 >(
     sources: Box<[S]>,
 ) -> Source<T>
 where
     S: Into<Arc<Source<T>>> + Send + Sync,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let concat_fn_span = Span::current();
     let sources: Arc<Box<[Arc<Source<T>>]>> =
         Arc::new(Vec::from(sources).into_iter().map(|s| s.into()).collect());
@@ -51,7 +98,7 @@ where
             let got_pull = Arc::new(AtomicBool::new(false));
             let talkback: Arc<Source<T>> = Arc::new(
                 {
-                    #[cfg(feature = "trace")]
+                    #[cfg(feature = "tracing")]
                     let concat_span = concat_span.clone();
                     let source_talkback = Arc::clone(&source_talkback);
                     let got_pull = Arc::clone(&got_pull);
@@ -101,7 +148,7 @@ where
                 let next_ref: Arc<ArcSwapOption<Box<dyn Fn() + Send + Sync>>> =
                     Arc::new(ArcSwapOption::from(None));
                 let next: Arc<Box<dyn Fn() + Send + Sync>> = Arc::new(Box::new({
-                    #[cfg(feature = "trace")]
+                    #[cfg(feature = "tracing")]
                     let concat_span = concat_span.clone();
                     let sources = Arc::clone(&sources);
                     let sink = Arc::clone(&sink);
@@ -116,7 +163,7 @@ where
                             sources[i.load(AtomicOrdering::Acquire)],
                             Message::Handshake(Arc::new(
                                 {
-                                    #[cfg(feature = "trace")]
+                                    #[cfg(feature = "tracing")]
                                     let concat_span = concat_span.clone();
                                     let sink = Arc::clone(&sink);
                                     let i = Arc::clone(&i);
@@ -186,51 +233,4 @@ where
         }
     })
     .into()
-}
-
-/// Callbag factory that concatenates the data from multiple (2 or more) callbag sources.
-///
-/// It starts each source at a time: waits for the previous source to end before starting the next
-/// source.
-///
-/// Works with both pullable and listenable sources.
-///
-/// See <https://github.com/staltz/callbag-concat/blob/db3ce91a831309057e165f344a87aa1615b4774e/readme.js#L29-L64>
-///
-/// # Examples
-///
-/// ```
-/// use crossbeam_queue::SegQueue;
-/// use std::sync::Arc;
-///
-/// use callbag::{concat, for_each, from_iter};
-///
-/// let actual = Arc::new(SegQueue::new());
-///
-/// let source = concat!(from_iter(["10", "20", "30"]), from_iter(["a", "b"]));
-///
-/// for_each({
-///     let actual = Arc::clone(&actual);
-///     move |x| {
-///         println!("{x}");
-///         actual.push(x);
-///     }
-/// })(source);
-///
-/// assert_eq!(
-///     &{
-///         let mut v = vec![];
-///         while let Some(x) = actual.pop() {
-///             v.push(x);
-///         }
-///         v
-///     }[..],
-///     ["10", "20", "30", "a", "b"]
-/// );
-/// ```
-#[macro_export]
-macro_rules! concat {
-    ($($s:expr),* $(,)?) => {
-        $crate::concat(::std::vec![$($s),*].into_boxed_slice())
-    };
 }
