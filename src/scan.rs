@@ -9,7 +9,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag operator that combines consecutive values from the same source.
@@ -53,12 +53,15 @@ use {std::fmt, tracing::Span};
 ///     [1, 3, 6, 10, 15]
 /// );
 /// ```
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace", skip(reducer)))]
+#[cfg_attr(
+    feature = "tracing",
+    tracing::instrument(level = "trace", skip(reducer))
+)]
 pub fn scan<
-    #[cfg(not(feature = "trace"))] I: 'static,
-    #[cfg(feature = "trace")] I: fmt::Debug + 'static,
-    #[cfg(not(feature = "trace"))] O: 'static,
-    #[cfg(feature = "trace")] O: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] I: 'static,
+    #[cfg(feature = "tracing")] I: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] O: 'static,
+    #[cfg(feature = "tracing")] O: fmt::Debug + 'static,
     F: 'static,
     S,
 >(
@@ -70,16 +73,16 @@ where
     F: Fn(O, I) -> O + Clone + Send + Sync,
     S: Into<Arc<Source<I>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let scan_fn_span = Span::current();
     Box::new(move |source| {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "tracing")]
         let _scan_fn_entered = scan_fn_span.enter();
         let source: Arc<Source<I>> = source.into();
         {
             let reducer = reducer.clone();
             let seed = seed.clone();
-            #[cfg(feature = "trace")]
+            #[cfg(feature = "tracing")]
             let scan_fn_span = scan_fn_span.clone();
             move |message| {
                 instrument!(follows_from: &scan_fn_span, "scan", scan_span);
@@ -91,7 +94,7 @@ where
                         Message::Handshake(Arc::new(
                             {
                                 let reducer = reducer.clone();
-                                #[cfg(feature = "trace")]
+                                #[cfg(feature = "tracing")]
                                 let scan_span = scan_span.clone();
                                 move |message| {
                                     instrument!(parent: &scan_span, "source_talkback");
@@ -102,7 +105,7 @@ where
                                                 sink,
                                                 Message::Handshake(Arc::new(
                                                     {
-                                                        #[cfg(feature = "trace")]
+                                                        #[cfg(feature = "tracing")]
                                                         let scan_span = scan_span.clone();
                                                         move |message| {
                                                             instrument!(

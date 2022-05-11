@@ -9,7 +9,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag operator that flattens a higher-order callbag source.
@@ -69,14 +69,14 @@ use {std::fmt, tracing::Span};
 /// [reactivex-switch]: https://reactivex.io/documentation/operators/switch.html
 /// [rxjs-switch-map]: https://rxjs.dev/api/operators/switchMap
 /// [xstream-flatten]: https://github.com/staltz/xstream#flatten
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub fn flatten<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
-    #[cfg(not(feature = "trace"))] S,
-    #[cfg(feature = "trace")] S: fmt::Debug,
-    #[cfg(not(feature = "trace"))] R: 'static,
-    #[cfg(feature = "trace")] R: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] S,
+    #[cfg(feature = "tracing")] S: fmt::Debug,
+    #[cfg(not(feature = "tracing"))] R: 'static,
+    #[cfg(feature = "tracing")] R: fmt::Debug + 'static,
 >(
     source: S,
 ) -> Source<T>
@@ -84,7 +84,7 @@ where
     S: Into<Arc<Source<R>>>,
     R: Into<Arc<Source<T>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let flatten_fn_span = Span::current();
     let source: Arc<Source<R>> = source.into();
     (move |message| {
@@ -95,7 +95,7 @@ where
             let inner_talkback: Arc<ArcSwapOption<Source<T>>> = Arc::new(ArcSwapOption::from(None));
             let talkback: Arc<Source<T>> = Arc::new(
                 {
-                    #[cfg(feature = "trace")]
+                    #[cfg(feature = "tracing")]
                     let flatten_span = flatten_span.clone();
                     let outer_talkback = Arc::clone(&outer_talkback);
                     let inner_talkback = Arc::clone(&inner_talkback);
@@ -149,7 +149,7 @@ where
                 source,
                 Message::Handshake(Arc::new(
                     {
-                        #[cfg(feature = "trace")]
+                        #[cfg(feature = "tracing")]
                         let flatten_span = flatten_span.clone();
                         move |message| {
                             instrument!(parent: &flatten_span, "outer_source_talkback");
@@ -179,7 +179,7 @@ where
                                         inner_source,
                                         Message::Handshake(Arc::new(
                                             {
-                                                #[cfg(feature = "trace")]
+                                                #[cfg(feature = "tracing")]
                                                 let flatten_span = flatten_span.clone();
                                                 move |message| {
                                                     instrument!(

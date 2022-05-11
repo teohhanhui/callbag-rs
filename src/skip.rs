@@ -12,7 +12,7 @@ use crate::{
     Message, Source,
 };
 
-#[cfg(feature = "trace")]
+#[cfg(feature = "tracing")]
 use {std::fmt, tracing::Span};
 
 /// Callbag operator that skips the first N data points of a source.
@@ -120,10 +120,10 @@ use {std::fmt, tracing::Span};
 ///     [14, 15, 16, 17, 18, 19, 20]
 /// );
 /// ```
-#[cfg_attr(feature = "trace", tracing::instrument(level = "trace"))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub fn skip<
-    #[cfg(not(feature = "trace"))] T: 'static,
-    #[cfg(feature = "trace")] T: fmt::Debug + 'static,
+    #[cfg(not(feature = "tracing"))] T: 'static,
+    #[cfg(feature = "tracing")] T: fmt::Debug + 'static,
     S,
 >(
     max: usize,
@@ -131,14 +131,14 @@ pub fn skip<
 where
     S: Into<Arc<Source<T>>>,
 {
-    #[cfg(feature = "trace")]
+    #[cfg(feature = "tracing")]
     let skip_fn_span = Span::current();
     Box::new(move |source| {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "tracing")]
         let _skip_fn_entered = skip_fn_span.enter();
         let source: Arc<Source<T>> = source.into();
         {
-            #[cfg(feature = "trace")]
+            #[cfg(feature = "tracing")]
             let skip_fn_span = skip_fn_span.clone();
             move |message| {
                 instrument!(follows_from: &skip_fn_span, "skip", skip_span);
@@ -151,7 +151,7 @@ where
                         source,
                         Message::Handshake(Arc::new(
                             {
-                                #[cfg(feature = "trace")]
+                                #[cfg(feature = "tracing")]
                                 let skip_span = skip_span.clone();
                                 move |message| {
                                     instrument!(parent: &skip_span, "source_talkback");
@@ -163,7 +163,7 @@ where
                                                 sink,
                                                 Message::Handshake(Arc::new(
                                                     {
-                                                        #[cfg(feature = "trace")]
+                                                        #[cfg(feature = "tracing")]
                                                         let skip_span = skip_span.clone();
                                                         let talkback = Arc::clone(&talkback);
                                                         move |message| {

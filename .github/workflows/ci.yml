@@ -93,11 +93,11 @@ jobs:
         with:
           command: test
           toolchain: ${{ matrix.rust }}
-          args: --no-fail-fast --features trace_futures -- --nocapture --test-threads=1
+          args: --no-fail-fast --features tracing -- --nocapture --test-threads=1
       - name: Install wasm-pack
         uses: ./.github/actions/install-wasm-pack
       - name: Run tests (wasm32-unknown-unknown, node)
-        run: rustup run ${{ matrix.rust }} wasm-pack test --node -- --features trace_futures
+        run: rustup run ${{ matrix.rust }} wasm-pack test --node -- --features tracing
       - name: Install cargo-wasi
         uses: ./.github/actions/cargo
         with:
@@ -110,7 +110,7 @@ jobs:
         with:
           command: wasi
           toolchain: ${{ matrix.rust }}
-          args: test --no-fail-fast --features trace -- --nocapture --test-threads=1
+          args: test --no-fail-fast --features tracing -- --nocapture --test-threads=1
       - name: Run doctests
         uses: ./.github/actions/cargo
         with:
