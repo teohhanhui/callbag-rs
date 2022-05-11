@@ -15,10 +15,7 @@ use {
     tracing_futures::Instrument,
 };
 
-#[cfg(all(
-    all(target_arch = "wasm32", not(target_os = "wasi")),
-    feature = "browser",
-))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(all(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -42,10 +39,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn interval_50_sends_5_times_then_we_dispose_it() {
@@ -90,10 +84,7 @@ async fn interval_50_sends_5_times_then_we_dispose_it() {
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn interval_1000_can_be_disposed_before_anything_is_sent() {

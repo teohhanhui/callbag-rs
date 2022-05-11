@@ -47,10 +47,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn it_shares_an_async_finite_listenable_source() {
@@ -226,10 +223,7 @@ async fn it_shares_an_async_finite_listenable_source() {
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn it_shares_a_pullable_source() {
@@ -501,10 +495,7 @@ async fn it_shares_a_pullable_source() {
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn it_disposes_only_when_last_sink_sends_upwards_end() {
