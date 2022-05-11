@@ -12,8 +12,8 @@ categories = ["asynchronous", "concurrency"]
 
 [dependencies]
 arc-swap = "1.5.0"
-async_executors = { version = "0.5.1", optional = true }
-async_nursery = { version = "0.4.0", default-features = false, optional = true }
+async_executors = { version = "0.6.0", optional = true }
+async_nursery = { version = "0.5.0", default-features = false, optional = true }
 cfg-if = "1.0.0"
 never = "0.1.0"
 paste = { version = "1.0.6", optional = true }
@@ -30,11 +30,11 @@ tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "wasi")))'.dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes", "unstable"] }
-async_executors = { version = "0.5.1", features = ["async_std", "tracing"] }
-async_nursery = { version = "0.4.0", features = ["tracing"] }
+async_executors = { version = "0.6.0", features = ["async_std", "tracing"] }
+async_nursery = { version = "0.5.0", features = ["tracing"] }
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dev-dependencies]
-async_executors = { version = "0.5.1", features = ["timer"] }
+async_executors = { version = "0.6.0", features = ["timer"] }
 wasm-bindgen-test = "0.3.28"
 
 [features]
@@ -76,7 +76,6 @@ skip = []
 take = []
 tracing = [
     "async_executors?/tracing",
-    "async_nursery?/futures", # https://github.com/najamelan/async_nursery/issues/4
     "async_nursery?/tracing",
     "dep:paste",
     "dep:tracing",
