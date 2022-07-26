@@ -44,10 +44,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn it_concats_1_async_finite_listenable_source() {
@@ -152,10 +149,7 @@ async fn it_concats_1_async_finite_listenable_source() {
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn it_concats_2_async_finite_listenable_sources() {
@@ -530,10 +524,7 @@ fn it_concats_2_sync_finite_pullable_sources() {
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn it_returns_a_source_that_disposes_upon_upwards_end() {
@@ -655,10 +646,7 @@ async fn it_returns_a_source_that_disposes_upon_upwards_end() {
 #[tracing::instrument]
 #[test_log::test(async_std::test)]
 #[cfg_attr(
-    all(
-        all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "browser",
-    ),
+    all(target_arch = "wasm32", not(target_os = "wasi")),
     wasm_bindgen_test
 )]
 async fn it_propagates_source_error_to_sink_and_doesnt_subscribe_to_next_source() {

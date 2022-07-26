@@ -140,3 +140,6 @@ required-features = ["skip"]
 [[test]]
 name = "take"
 required-features = ["take"]
+
+[patch.crates-io]
+gloo-timers = { version = "0.2.4", git = "https://github.com/ctm/gloo", branch = "js_sys-experiment" }
